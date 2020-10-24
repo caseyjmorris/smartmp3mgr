@@ -35,7 +35,6 @@ var records = []Song{{
 const connectionString = "file:test.db?cache=shared&mode=memory"
 
 func TestRecordAndFetchSongs(t *testing.T) {
-
 	db, err := sql.Open("sqlite3", connectionString)
 	if err != nil {
 		t.Error(err)
@@ -46,11 +45,31 @@ func TestRecordAndFetchSongs(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	result, err := FetchSongs(db)
+	result, err := FetchSongs(db, []string{})
 	if err != nil {
 		t.Error(err)
 	}
 	if !reflect.DeepEqual(records, result) {
 		t.Errorf("Records returned don't match.  \r\nExpected:  %v  \r\nActual:  %v", records, result)
+	}
+}
+
+func TestFilteredFetchSongs(t *testing.T) {
+	db, err := sql.Open("sqlite3", connectionString)
+	if err != nil {
+		t.Error(err)
+	}
+	defer db.Close()
+
+	err = RecordSongs(db, records)
+	if err != nil {
+		t.Error(err)
+	}
+	result, err := FetchSongs(db, []string{"cfdkfkslafj"})
+	if err != nil {
+		t.Error(err)
+	}
+	if !reflect.DeepEqual(records[1:], result) {
+		t.Errorf("Records returned don't match.  \r\nExpected:  %v  \r\nActual:  %v", records[1:], result)
 	}
 }

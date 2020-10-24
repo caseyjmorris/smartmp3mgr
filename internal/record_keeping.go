@@ -61,7 +61,7 @@ func RecordSongs(db *sql.DB, songs []Song) error {
 	return nil
 }
 
-func FetchSongs(db *sql.DB) ([]Song, error) {
+func FetchSongs(db *sql.DB, desiredHashes []string) ([]Song, error) {
 	var result []Song
 
 	err := prepareTable(db)
@@ -74,7 +74,54 @@ func FetchSongs(db *sql.DB) ([]Song, error) {
         FROM Songs
 		`
 
-	rows, err := db.Query(query)
+	const filteredQuery = `
+		SELECT Path, Artist, Album, Title, s.Hash, Genre, AlbumArtist, TrackNumber, TotalTracks, DiscNumber, TotalDiscs 
+        FROM Songs s
+        INNER JOIN DesiredHashes dh ON dh.Hash = s.Hash 
+		`
+
+	var rows *sql.Rows
+
+	if len(desiredHashes) == 0 {
+		rows, err = db.Query(query)
+	} else {
+		_, err = db.Exec("CREATE TEMPORARY TABLE DesiredHashes(hash TEXT NOT NULL)")
+		if err != nil {
+			return result, err
+		}
+
+		tx, err := db.Begin()
+		if err != nil {
+			return result, err
+		}
+
+		const insertSQL = `
+			INSERT INTO DesiredHashes(hash) VALUES (?)
+			`
+
+		stmt, err := db.Prepare(insertSQL)
+		if err != nil {
+			return result, err
+		}
+
+		for _, hash := range desiredHashes {
+			_, err = stmt.Exec(hash)
+			if err != nil {
+				return result, err
+			}
+		}
+
+		err = tx.Commit()
+		if err != nil {
+			return result, err
+		}
+
+		rows, err = db.Query(filteredQuery)
+		if err != nil {
+			return result, err
+		}
+	}
+
 	defer rows.Close()
 	if err != nil {
 		return result, nil
