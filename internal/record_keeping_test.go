@@ -73,3 +73,27 @@ func TestFilteredFetchSongs(t *testing.T) {
 		t.Errorf("Records returned don't match.  \r\nExpected:  %v  \r\nActual:  %v", records[1:], result)
 	}
 }
+
+func TestInsertIdempotent(t *testing.T) {
+	db, err := sql.Open("sqlite3", connectionString)
+	if err != nil {
+		t.Error(err)
+	}
+	defer db.Close()
+
+	err = RecordSongs(db, records)
+	if err != nil {
+		t.Error(err)
+	}
+	err = RecordSongs(db, records)
+	if err != nil {
+		t.Error(err)
+	}
+	result, err := FetchSongs(db, []string{})
+	if err != nil {
+		t.Error(err)
+	}
+	if !reflect.DeepEqual(records, result) {
+		t.Errorf("Records returned don't match.  \r\nExpected:  %v  \r\nActual:  %v", records, result)
+	}
+}

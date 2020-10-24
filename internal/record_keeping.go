@@ -37,7 +37,11 @@ func RecordSongs(db *sql.DB, songs []Song) error {
 	const insertStatement = `
 		INSERT INTO Songs(Path, Artist, Album, Title, Hash, Genre, AlbumArtist, TrackNumber, TotalTracks, 
 		  DiscNumber, TotalDiscs)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (@Path, @Artist, @Album, @Title, @Hash, @Genre, @AlbumArtist, @TrackNumber, @TotalTracks, 
+		@DiscNumber, @TotalDiscs)
+		ON CONFLICT(Path) DO UPDATE SET Path = @Path, Artist = @Artist, Album = @Album, Title = @Title, Hash = @Hash,
+		Genre = @Genre, AlbumArtist = @AlbumArtist, TrackNumber = @TrackNumber, TotalTracks = @TotalTracks,
+		DiscNumber = @DiscNumber, TotalDiscs = @TotalDiscs
 		`
 
 	insertPrepared, err := db.Prepare(insertStatement)
