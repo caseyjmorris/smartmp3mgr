@@ -3,6 +3,8 @@ module github.com/caseyjmorris/smartmp3mgr
 go 1.15
 
 require (
-	github.com/bogem/id3v2 v1.2.0
+	github.com/dhowden/itl v0.0.0-20170329215456-9fbe21093131 // indirect
+	github.com/dhowden/plist v0.0.0-20141002110153-5db6e0d9931a // indirect
+	github.com/dhowden/tag v0.0.0-20200828214007-46e57f75dbfc
 	golang.org/x/text v0.3.3 // indirect
 )

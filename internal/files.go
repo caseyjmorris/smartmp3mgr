@@ -2,7 +2,7 @@ package internal
 
 import (
 	"encoding/hex"
-	"github.com/bogem/id3v2"
+	"github.com/dhowden/tag"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -10,12 +10,19 @@ import (
 )
 
 func ParseMP3(mp3Path string) (Song, error) {
-	tags, err := id3v2.Open(mp3Path, id3v2.Options{Parse: true})
+	file, err := os.OpenFile(mp3Path, os.O_RDONLY, 0)
 	if err != nil {
 		return Song{}, err
 	}
-	song := Song{Path: mp3Path, Artist: tags.Artist(), Album: tags.Album(), Genre: tags.Genre(), Title: tags.Title()}
-	err = tags.Close()
+	tags, err := tag.ReadFrom(file)
+	if err != nil {
+		return Song{}, err
+	}
+	trackNumber, tracks := tags.Track()
+	discNumber, discs := tags.Disc()
+	song := Song{Path: mp3Path, Artist: tags.Artist(), Album: tags.Album(), Genre: tags.Genre(),
+		Title: tags.Title(), TrackNumber: trackNumber, TotalTracks: tracks, DiscNumber: discNumber, TotalDiscs: discs}
+	err = file.Close()
 	if err != nil {
 		return song, err
 	}
