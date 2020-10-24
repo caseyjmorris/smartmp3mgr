@@ -21,7 +21,8 @@ func ParseMP3(mp3Path string) (Song, error) {
 	trackNumber, tracks := tags.Track()
 	discNumber, discs := tags.Disc()
 	song := Song{Path: mp3Path, Artist: tags.Artist(), Album: tags.Album(), Genre: tags.Genre(),
-		Title: tags.Title(), TrackNumber: trackNumber, TotalTracks: tracks, DiscNumber: discNumber, TotalDiscs: discs}
+		Title: tags.Title(), TrackNumber: trackNumber, TotalTracks: tracks, DiscNumber: discNumber, TotalDiscs: discs,
+		AlbumArtist: tags.AlbumArtist()}
 	err = file.Close()
 	if err != nil {
 		return song, err
