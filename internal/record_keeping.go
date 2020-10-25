@@ -89,12 +89,12 @@ func FetchSongs(db *sql.DB, desiredHashes []string) ([]Song, error) {
 	if len(desiredHashes) == 0 {
 		rows, err = db.Query(query)
 	} else {
-		_, err = db.Exec("CREATE TEMPORARY TABLE DesiredHashes(hash TEXT NOT NULL)")
+		tx, err := db.Begin()
 		if err != nil {
 			return result, err
 		}
 
-		tx, err := db.Begin()
+		_, err = db.Exec("CREATE TEMPORARY TABLE DesiredHashes(hash TEXT NOT NULL)")
 		if err != nil {
 			return result, err
 		}

@@ -5,6 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"github.com/caseyjmorris/smartmp3mgr/internal"
+	_ "github.com/mattn/go-sqlite3"
+	"gopkg.in/yaml.v2"
 	"os"
 	"path/filepath"
 	"strings"
@@ -39,7 +41,7 @@ func main() {
 		}
 		os.Exit(0)
 	case "record":
-		recordCmd.Parse(os.Args[2:])
+		_ = recordCmd.Parse(os.Args[2:])
 		info, err := os.Stat(*recordDir)
 		if (err != nil && os.IsNotExist(err)) || !info.IsDir() {
 			fmt.Printf("%q is not a directory\n", *recordDir)
@@ -82,7 +84,7 @@ func main() {
 
 		os.Exit(0)
 	case "find-new":
-		findNewCmd.Parse(os.Args[2:])
+		_ = findNewCmd.Parse(os.Args[2:])
 		info, err := os.Stat(*newCmdDir)
 		if (err != nil && os.IsNotExist(err)) || !info.IsDir() {
 			fmt.Printf("%q is not a directory\n", *newCmdDir)
@@ -101,6 +103,7 @@ func main() {
 		}
 
 		var parsed []internal.Song
+		var hashes []string
 		for _, file := range files {
 			record, err := internal.ParseMP3(file)
 			if err != nil {
@@ -108,6 +111,7 @@ func main() {
 				os.Exit(1)
 			}
 			parsed = append(parsed, record)
+			hashes = append(hashes, record.Hash)
 		}
 		db, err := sql.Open("sqlite3", *newCmdDb)
 		if err != nil {
@@ -116,7 +120,26 @@ func main() {
 		}
 		defer db.Close()
 
-		err = internal.RecordSongs(db, parsed)
+		existing, err := internal.FetchSongs(db, hashes)
+		existsMap := make(map[string]internal.Song)
+
+		for _, existingRecord := range existing {
+			existsMap[existingRecord.Hash] = existingRecord
+		}
+
+		for _, parsedRecord := range parsed {
+			if _, ok := existsMap[parsedRecord.Hash]; ok {
+				continue
+			}
+			readable, err := yaml.Marshal(parsedRecord)
+			if err != nil {
+				fmt.Println(err)
+				os.Exit(1)
+			}
+
+			fmt.Println(string(readable))
+		}
+
 		if err != nil {
 			fmt.Println(err)
 			findNewCmd.Usage()

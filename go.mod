@@ -8,4 +8,5 @@ require (
 	github.com/dhowden/tag v0.0.0-20200828214007-46e57f75dbfc
 	github.com/mattn/go-sqlite3 v1.14.4
 	golang.org/x/text v0.3.3 // indirect
+	gopkg.in/yaml.v2 v2.3.0
 )
