@@ -42,38 +42,39 @@ func main() {
 				fmt.Println("hint:  are you on Windows and using a quoted directory with the trailing backslash?")
 			}
 			recordCmd.Usage()
-
-			files, err := internal.FindMP3Files(os.Args[2])
-
-			if err != nil {
-				fmt.Println(err)
-				os.Exit(1)
-			}
-
-			var parsed []internal.Song
-			for _, file := range files {
-				record, err := internal.ParseMP3(file)
-				if err != nil {
-					fmt.Println(err)
-					os.Exit(1)
-				}
-				parsed = append(parsed, record)
-			}
-			db, err := sql.Open("sqlite3", *recordDb)
-			if err != nil {
-				fmt.Println(err)
-				os.Exit(1)
-			}
-			defer db.Close()
-
-			err = internal.RecordSongs(db, parsed)
-			if err != nil {
-				fmt.Println(err)
-				recordCmd.Usage()
-				os.Exit(1)
-			}
-
-			os.Exit(0)
+			os.Exit(1)
 		}
+
+		files, err := internal.FindMP3Files(*recordDir)
+
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+
+		var parsed []internal.Song
+		for _, file := range files {
+			record, err := internal.ParseMP3(file)
+			if err != nil {
+				fmt.Println(err)
+				os.Exit(1)
+			}
+			parsed = append(parsed, record)
+		}
+		db, err := sql.Open("sqlite3", *recordDb)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		defer db.Close()
+
+		err = internal.RecordSongs(db, parsed)
+		if err != nil {
+			fmt.Println(err)
+			recordCmd.Usage()
+			os.Exit(1)
+		}
+
+		os.Exit(0)
 	}
 }

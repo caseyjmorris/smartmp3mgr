@@ -55,9 +55,10 @@ func FindMP3Files(root string) ([]string, error) {
 		}
 
 		ext := filepath.Ext(path)
+		absolutePath, err := filepath.Abs(path)
 
-		if !info.IsDir() && strings.EqualFold(ext, ".mp3") {
-			files = append(files, path)
+		if err == nil && !info.IsDir() && strings.EqualFold(ext, ".mp3") {
+			files = append(files, absolutePath)
 		}
 
 		return nil
