@@ -3,6 +3,7 @@ package internal
 import (
 	"crypto/sha256"
 	"errors"
+	"fmt"
 )
 
 func Hash(bytes []byte) ([32]byte, error) {
@@ -29,6 +30,10 @@ func Hash(bytes []byte) ([32]byte, error) {
 
 	if string(bytes[lastIndex-128:lastIndex-125]) == "TAG" {
 		rightBound = -128
+	}
+
+	if leftBound > lastIndex || rightBound > lastIndex {
+		return [32]byte{}, fmt.Errorf("invalid file; could not parse")
 	}
 
 	hash := sha256.Sum256(bytes[leftBound:rightBound])
