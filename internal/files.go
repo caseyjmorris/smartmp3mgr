@@ -11,21 +11,20 @@ import (
 
 func ParseMP3(mp3Path string) (Song, error) {
 	file, err := os.OpenFile(mp3Path, os.O_RDONLY, 0)
+	defer file.Close()
 	if err != nil {
 		return Song{}, err
 	}
 	tags, err := tag.ReadFrom(file)
-	if err != nil {
-		return Song{}, err
-	}
-	trackNumber, tracks := tags.Track()
-	discNumber, discs := tags.Disc()
-	song := Song{Path: mp3Path, Artist: tags.Artist(), Album: tags.Album(), Genre: tags.Genre(),
-		Title: tags.Title(), TrackNumber: trackNumber, TotalTracks: tracks, DiscNumber: discNumber, TotalDiscs: discs,
-		AlbumArtist: tags.AlbumArtist()}
-	err = file.Close()
-	if err != nil {
-		return song, err
+	var song Song
+	if err == nil {
+		trackNumber, tracks := tags.Track()
+		discNumber, discs := tags.Disc()
+		song = Song{Path: mp3Path, Artist: tags.Artist(), Album: tags.Album(), Genre: tags.Genre(),
+			Title: tags.Title(), TrackNumber: trackNumber, TotalTracks: tracks, DiscNumber: discNumber, TotalDiscs: discs,
+			AlbumArtist: tags.AlbumArtist()}
+	} else {
+		song = Song{}
 	}
 
 	mp3Bytes, err := ioutil.ReadFile(mp3Path)

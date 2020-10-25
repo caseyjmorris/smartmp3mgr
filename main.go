@@ -8,6 +8,25 @@ import (
 )
 
 func main() {
+	if len(os.Args) < 3 {
+		fmt.Println("Usage:  smartmp3mgr (sum|record|find-new) (args)")
+		os.Exit(1)
+	}
+
+	switch os.Args[1] {
+	case "sum":
+		for _, file := range os.Args[2:] {
+			mp3, err := internal.ParseMP3(file)
+			if err != nil {
+				fmt.Println(err)
+				fmt.Println("usage:  smartmp3mgr sum [files]")
+				os.Exit(1)
+			}
+			fmt.Printf("%q:  %s\r\n", file, mp3.Hash)
+		}
+		os.Exit(0)
+	}
+
 	fmt.Println("Hello world")
 	fmt.Println(os.Args[1])
 
