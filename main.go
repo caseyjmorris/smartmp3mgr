@@ -19,7 +19,12 @@ func main() {
 	recordCmd := flag.NewFlagSet("record", flag.ExitOnError)
 	recordDir := recordCmd.String("directory", "", "directory")
 	homeDir, _ := os.UserHomeDir()
-	recordDb := recordCmd.String("dbPath", filepath.Join(homeDir, ".smartmp3mgr.sql"), "path to sqlite db")
+	defaultDb := filepath.Join(homeDir, ".smartmp3mgr.sql")
+	recordDb := recordCmd.String("dbPath", defaultDb, "path to sqlite db")
+
+	findNewCmd := flag.NewFlagSet("find-new", flag.ExitOnError)
+	newCmdDir := findNewCmd.String("directory", "", "directory")
+	newCmdDb := findNewCmd.String("dbPath", defaultDb, "path to sqlite db")
 
 	switch os.Args[1] {
 	case "sum":
@@ -76,5 +81,51 @@ func main() {
 		}
 
 		os.Exit(0)
+	case "find-new":
+		findNewCmd.Parse(os.Args[2:])
+		info, err := os.Stat(*newCmdDir)
+		if (err != nil && os.IsNotExist(err)) || !info.IsDir() {
+			fmt.Printf("%q is not a directory\n", *newCmdDir)
+			if strings.HasSuffix(os.Args[2], "\\\"") {
+				fmt.Println("hint:  are you on Windows and using a quoted directory with the trailing backslash?")
+			}
+			findNewCmd.Usage()
+			os.Exit(1)
+		}
+
+		files, err := internal.FindMP3Files(*newCmdDir)
+
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+
+		var parsed []internal.Song
+		for _, file := range files {
+			record, err := internal.ParseMP3(file)
+			if err != nil {
+				fmt.Println(err)
+				os.Exit(1)
+			}
+			parsed = append(parsed, record)
+		}
+		db, err := sql.Open("sqlite3", *newCmdDb)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		defer db.Close()
+
+		err = internal.RecordSongs(db, parsed)
+		if err != nil {
+			fmt.Println(err)
+			findNewCmd.Usage()
+			os.Exit(1)
+		}
+
+		os.Exit(0)
+	default:
+		fmt.Println("Usage:  smartmp3mgr (sum|record|find-new) (args)")
+		os.Exit(1)
 	}
 }
