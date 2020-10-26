@@ -22,6 +22,7 @@ func TestHashSame(t *testing.T) {
 	originalPath := getFixturePath("wakka-wakka-default.mp3")
 	noTagPath := getFixturePath("wakka-wakka-no-tags.mp3")
 	alteredTagPath := getFixturePath("wakka-wakka-altered-tags.mp3")
+	id3v1Tagpath := getFixturePath("wakka-wakka-with-id3v1.mp3")
 	originalBytes, err := ioutil.ReadFile(originalPath)
 	if err != nil {
 		t.Error(err)
@@ -38,9 +39,12 @@ func TestHashSame(t *testing.T) {
 		t.Error(err)
 		return
 	}
+
+	id3v1Bytes, _ := ioutil.ReadFile(id3v1Tagpath)
 	originalHash, _ := Hash(originalBytes)
 	noTagHash, _ := Hash(noTagBytes)
 	alteredHash, _ := Hash(alteredBytes)
+	id3v1Hash, _ := Hash(id3v1Bytes)
 
 	if originalHash != noTagHash {
 		t.Errorf("Original (%x) did not match no-tag (%x)", originalHash, noTagHash)
@@ -48,5 +52,9 @@ func TestHashSame(t *testing.T) {
 
 	if originalHash != alteredHash {
 		t.Errorf("Original (%x) did not match altered (%x)", originalHash, alteredHash)
+	}
+
+	if id3v1Hash != originalHash {
+		t.Errorf("Original (%x) did not match ID3v1 (%x)", originalHash, id3v1Hash)
 	}
 }

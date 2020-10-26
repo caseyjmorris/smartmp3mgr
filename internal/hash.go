@@ -28,8 +28,8 @@ func Hash(bytes []byte) ([32]byte, error) {
 
 	lastIndex := len(bytes) - 1
 
-	if string(bytes[lastIndex-128:lastIndex-125]) == "TAG" {
-		rightBound = -128
+	if string(bytes[lastIndex-127:lastIndex-124]) == "TAG" {
+		rightBound = lastIndex - 128
 	}
 
 	if leftBound > lastIndex || rightBound > lastIndex {
