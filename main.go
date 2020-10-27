@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/caseyjmorris/smartmp3mgr/internal"
 	_ "github.com/mattn/go-sqlite3"
-	"gopkg.in/yaml.v2"
 	"os"
 	"path/filepath"
 	"strings"
@@ -132,14 +131,8 @@ func main() {
 			if _, ok := existsMap[parsedRecord.Hash]; ok {
 				continue
 			}
-			readable, err := yaml.Marshal(parsedRecord)
-			if err != nil {
-				fmt.Println(err)
-				os.Exit(1)
-			}
+			fmt.Println(parsedRecord.Path)
 			uniq++
-
-			fmt.Println(string(readable))
 		}
 
 		fmt.Printf("(%d new songs)", uniq)
