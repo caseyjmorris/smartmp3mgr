@@ -1,4 +1,4 @@
-package internal
+package mp3
 
 import (
 	"crypto/sha256"

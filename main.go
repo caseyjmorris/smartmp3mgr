@@ -3,7 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/caseyjmorris/smartmp3mgr/internal"
+	"github.com/caseyjmorris/smartmp3mgr/files"
+	"github.com/caseyjmorris/smartmp3mgr/mp3"
 	"github.com/caseyjmorris/smartmp3mgr/records"
 	_ "github.com/mattn/go-sqlite3"
 	"os"
@@ -30,7 +31,7 @@ func main() {
 	switch os.Args[1] {
 	case "sum":
 		for _, file := range os.Args[2:] {
-			mp3, err := internal.ParseMP3(file)
+			mp3, err := mp3.ParseMP3(file)
 			if err != nil {
 				fmt.Println(err)
 				fmt.Println("usage:  smartmp3mgr sum [files]")
@@ -51,16 +52,16 @@ func main() {
 			os.Exit(1)
 		}
 
-		files, err := internal.FindMP3Files(*recordDir)
+		files, err := files.FindMP3Files(*recordDir)
 
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)
 		}
 
-		var parsed []internal.Song
+		var parsed []mp3.Song
 		for _, file := range files {
-			record, err := internal.ParseMP3(file)
+			record, err := mp3.ParseMP3(file)
 			if err != nil {
 				fmt.Println(err)
 				os.Exit(1)
@@ -94,17 +95,17 @@ func main() {
 			os.Exit(1)
 		}
 
-		files, err := internal.FindMP3Files(*newCmdDir)
+		files, err := files.FindMP3Files(*newCmdDir)
 
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)
 		}
 
-		var parsed []internal.Song
+		var parsed []mp3.Song
 		var hashes []string
 		for _, file := range files {
-			record, err := internal.ParseMP3(file)
+			record, err := mp3.ParseMP3(file)
 			if err != nil {
 				continue
 			}
@@ -119,7 +120,7 @@ func main() {
 		defer db.Close()
 
 		existing, err := db.FetchSongs(hashes)
-		existsMap := make(map[string]internal.Song)
+		existsMap := make(map[string]mp3.Song)
 
 		for _, existingRecord := range existing {
 			existsMap[existingRecord.Hash] = existingRecord

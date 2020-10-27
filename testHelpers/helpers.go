@@ -1,4 +1,4 @@
-package internal
+package testHelpers
 
 import (
 	"os"
@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-func getFixturePath(fixture string) string {
+func GetFixturePath(fixture string) string {
 	return path.Join(getRootDir(), "testFiles", fixture)
 }
 
