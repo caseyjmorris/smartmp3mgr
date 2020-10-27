@@ -1,11 +1,25 @@
-package internal
+package records
 
 import (
 	"database/sql"
+	"fmt"
+	"github.com/caseyjmorris/smartmp3mgr/internal"
 	_ "github.com/mattn/go-sqlite3"
 )
 
-func prepareTable(db *sql.DB) error {
+type RecordKeeper struct {
+	*sql.DB
+}
+
+func Open(connectionString string) (*RecordKeeper, error) {
+	db, err := sql.Open("sqlite3", connectionString)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to sqlite db:  %s", err)
+	}
+	return &RecordKeeper{db}, nil
+}
+
+func (rk *RecordKeeper) prepareSongsTable() error {
 	const statement = `
 		CREATE TABLE IF NOT EXISTS 
 		  Songs (Path TEXT NOT NULL PRIMARY KEY, Artist TEXT, Album TEXT, Title TEXT, Hash TEXT, Genre TEXT,
@@ -14,7 +28,7 @@ func prepareTable(db *sql.DB) error {
 		  SongsHashIndex ON Songs(Hash)
     `
 
-	_, err := db.Exec(statement)
+	_, err := rk.Exec(statement)
 
 	if err != nil {
 		return err
@@ -23,13 +37,13 @@ func prepareTable(db *sql.DB) error {
 	return nil
 }
 
-func RecordSongs(db *sql.DB, songs []Song) error {
-	err := prepareTable(db)
+func (rk *RecordKeeper) RecordSongs(songs []internal.Song) error {
+	err := rk.prepareSongsTable()
 	if err != nil {
 		return err
 	}
 
-	tx, err := db.Begin()
+	tx, err := rk.Begin()
 	if err != nil {
 		return err
 	}
@@ -44,7 +58,7 @@ func RecordSongs(db *sql.DB, songs []Song) error {
 		DiscNumber = @DiscNumber, TotalDiscs = @TotalDiscs
 		`
 
-	insertPrepared, err := db.Prepare(insertStatement)
+	insertPrepared, err := rk.Prepare(insertStatement)
 	if err != nil {
 		return err
 	}
@@ -65,10 +79,10 @@ func RecordSongs(db *sql.DB, songs []Song) error {
 	return nil
 }
 
-func FetchSongs(db *sql.DB, desiredHashes []string) ([]Song, error) {
-	var result []Song
+func (rk *RecordKeeper) FetchSongs(desiredHashes []string) ([]internal.Song, error) {
+	var result []internal.Song
 
-	err := prepareTable(db)
+	err := rk.prepareSongsTable()
 	if err != nil {
 		return result, err
 	}
@@ -87,14 +101,14 @@ func FetchSongs(db *sql.DB, desiredHashes []string) ([]Song, error) {
 	var rows *sql.Rows
 
 	if len(desiredHashes) == 0 {
-		rows, err = db.Query(query)
+		rows, err = rk.Query(query)
 	} else {
-		tx, err := db.Begin()
+		tx, err := rk.Begin()
 		if err != nil {
 			return result, err
 		}
 
-		_, err = db.Exec("CREATE TEMPORARY TABLE DesiredHashes(hash TEXT NOT NULL)")
+		_, err = rk.Exec("CREATE TEMPORARY TABLE DesiredHashes(hash TEXT NOT NULL)")
 		if err != nil {
 			return result, err
 		}
@@ -103,7 +117,7 @@ func FetchSongs(db *sql.DB, desiredHashes []string) ([]Song, error) {
 			INSERT INTO DesiredHashes(hash) VALUES (?)
 			`
 
-		stmt, err := db.Prepare(insertSQL)
+		stmt, err := rk.Prepare(insertSQL)
 		if err != nil {
 			return result, err
 		}
@@ -120,7 +134,7 @@ func FetchSongs(db *sql.DB, desiredHashes []string) ([]Song, error) {
 			return result, err
 		}
 
-		rows, err = db.Query(filteredQuery)
+		rows, err = rk.Query(filteredQuery)
 		if err != nil {
 			return result, err
 		}
@@ -132,7 +146,7 @@ func FetchSongs(db *sql.DB, desiredHashes []string) ([]Song, error) {
 	}
 
 	for rows.Next() {
-		var song Song
+		var song internal.Song
 		err = rows.Scan(&song.Path, &song.Artist, &song.Album, &song.Title, &song.Hash, &song.Genre, &song.AlbumArtist,
 			&song.TrackNumber, &song.TotalTracks, &song.DiscNumber, &song.TotalDiscs)
 		if err != nil {

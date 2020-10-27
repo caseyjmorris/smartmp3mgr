@@ -1,12 +1,12 @@
-package internal
+package records
 
 import (
-	"database/sql"
+	"github.com/caseyjmorris/smartmp3mgr/internal"
 	"reflect"
 	"testing"
 )
 
-var records = []Song{{
+var records = []internal.Song{{
 	Path:        "c:\\Users\\Casey\\Song1.mp3",
 	Artist:      "Starpoint",
 	Album:       "Restless",
@@ -35,17 +35,17 @@ var records = []Song{{
 const connectionString = "file:test.db?cache=shared&mode=memory"
 
 func TestRecordAndFetchSongs(t *testing.T) {
-	db, err := sql.Open("sqlite3", connectionString)
+	db, err := Open(connectionString)
 	if err != nil {
 		t.Error(err)
 	}
 	defer db.Close()
 
-	err = RecordSongs(db, records)
+	err = db.RecordSongs(records)
 	if err != nil {
 		t.Error(err)
 	}
-	result, err := FetchSongs(db, []string{})
+	result, err := db.FetchSongs([]string{})
 	if err != nil {
 		t.Error(err)
 	}
@@ -55,17 +55,17 @@ func TestRecordAndFetchSongs(t *testing.T) {
 }
 
 func TestFilteredFetchSongs(t *testing.T) {
-	db, err := sql.Open("sqlite3", connectionString)
+	db, err := Open(connectionString)
 	if err != nil {
 		t.Error(err)
 	}
 	defer db.Close()
 
-	err = RecordSongs(db, records)
+	err = db.RecordSongs(records)
 	if err != nil {
 		t.Error(err)
 	}
-	result, err := FetchSongs(db, []string{"cfdkfkslafj"})
+	result, err := db.FetchSongs([]string{"cfdkfkslafj"})
 	if err != nil {
 		t.Error(err)
 	}
@@ -75,21 +75,21 @@ func TestFilteredFetchSongs(t *testing.T) {
 }
 
 func TestInsertIdempotent(t *testing.T) {
-	db, err := sql.Open("sqlite3", connectionString)
+	db, err := Open(connectionString)
 	if err != nil {
 		t.Error(err)
 	}
 	defer db.Close()
 
-	err = RecordSongs(db, records)
+	err = db.RecordSongs(records)
 	if err != nil {
 		t.Error(err)
 	}
-	err = RecordSongs(db, records)
+	err = db.RecordSongs(records)
 	if err != nil {
 		t.Error(err)
 	}
-	result, err := FetchSongs(db, []string{})
+	result, err := db.FetchSongs([]string{})
 	if err != nil {
 		t.Error(err)
 	}

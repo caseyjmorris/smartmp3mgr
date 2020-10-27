@@ -1,10 +1,10 @@
 package main
 
 import (
-	"database/sql"
 	"flag"
 	"fmt"
 	"github.com/caseyjmorris/smartmp3mgr/internal"
+	"github.com/caseyjmorris/smartmp3mgr/records"
 	_ "github.com/mattn/go-sqlite3"
 	"os"
 	"path/filepath"
@@ -67,14 +67,14 @@ func main() {
 			}
 			parsed = append(parsed, record)
 		}
-		db, err := sql.Open("sqlite3", *recordDb)
+		db, err := records.Open(*recordDb)
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)
 		}
 		defer db.Close()
 
-		err = internal.RecordSongs(db, parsed)
+		err = db.RecordSongs(parsed)
 		if err != nil {
 			fmt.Println(err)
 			recordCmd.Usage()
@@ -111,14 +111,14 @@ func main() {
 			parsed = append(parsed, record)
 			hashes = append(hashes, record.Hash)
 		}
-		db, err := sql.Open("sqlite3", *newCmdDb)
+		db, err := records.Open(*newCmdDb)
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)
 		}
 		defer db.Close()
 
-		existing, err := internal.FetchSongs(db, hashes)
+		existing, err := db.FetchSongs(hashes)
 		existsMap := make(map[string]internal.Song)
 
 		for _, existingRecord := range existing {
