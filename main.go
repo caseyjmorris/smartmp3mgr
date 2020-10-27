@@ -107,8 +107,7 @@ func main() {
 		for _, file := range files {
 			record, err := internal.ParseMP3(file)
 			if err != nil {
-				fmt.Println(err)
-				os.Exit(1)
+				continue
 			}
 			parsed = append(parsed, record)
 			hashes = append(hashes, record.Hash)
@@ -127,6 +126,8 @@ func main() {
 			existsMap[existingRecord.Hash] = existingRecord
 		}
 
+		uniq := 0
+
 		for _, parsedRecord := range parsed {
 			if _, ok := existsMap[parsedRecord.Hash]; ok {
 				continue
@@ -136,9 +137,12 @@ func main() {
 				fmt.Println(err)
 				os.Exit(1)
 			}
+			uniq++
 
 			fmt.Println(string(readable))
 		}
+
+		fmt.Printf("(%d new songs)", uniq)
 
 		if err != nil {
 			fmt.Println(err)
