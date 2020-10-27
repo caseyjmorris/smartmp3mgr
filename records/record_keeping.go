@@ -16,7 +16,18 @@ func Open(connectionString string) (*RecordKeeper, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to sqlite db:  %s", err)
 	}
-	return &RecordKeeper{db}, nil
+	rk := &RecordKeeper{db}
+
+	err = rk.prepareSongsTable()
+	if err != nil {
+		return nil, fmt.Errorf("error initializing Songs table:  %s", err)
+	}
+	err = rk.prepareCachesTable()
+	if err != nil {
+		return nil, fmt.Errorf("error initialized Caches table:  %s", err)
+	}
+
+	return rk, nil
 }
 
 func (rk *RecordKeeper) prepareSongsTable() error {
@@ -37,12 +48,63 @@ func (rk *RecordKeeper) prepareSongsTable() error {
 	return nil
 }
 
-func (rk *RecordKeeper) RecordSongs(songs []internal.Song) error {
-	err := rk.prepareSongsTable()
+func (rk *RecordKeeper) prepareCachesTable() error {
+	const statement = `
+		CREATE TABLE IF NOT EXISTS 
+		  Caches (Path TEXT NOT NULL PRIMARY KEY, Hash TEXT NOT NULL);
+		CREATE INDEX IF NOT EXISTS
+		  CachesHashIndex ON Caches(Hash)
+    `
+
+	_, err := rk.Exec(statement)
+
 	if err != nil {
 		return err
 	}
 
+	return nil
+}
+
+func (rk *RecordKeeper) CacheHash(path string, hash string) error {
+	const statement = `
+      INSERT INTO Caches(Path, Hash)
+      VALUES (@Path, @Hash)
+      ON CONFLICT(Path) DO UPDATE SET Hash=@Hash;
+     `
+
+	_, err := rk.Exec(statement, path, hash)
+	if err != nil {
+		return fmt.Errorf("error saving hash %q for file %q:  %s", hash, path, err)
+	}
+	return nil
+}
+
+func (rk *RecordKeeper) GetHashes() (map[string]string, error) {
+	const statement = `
+      SELECT Path, Hash FROM Caches
+    `
+
+	rows, err := rk.Query(statement)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get hashes:  %s", err)
+	}
+
+	result := make(map[string]string)
+
+	for rows.Next() {
+		var path string
+		var hash string
+		err = rows.Scan(&path, &hash)
+		if err != nil {
+			return nil, fmt.Errorf("error reading cache row:  %s", err)
+		}
+		result[path] = hash
+	}
+
+	return result, nil
+}
+
+func (rk *RecordKeeper) RecordSongs(songs []internal.Song) error {
 	tx, err := rk.Begin()
 	if err != nil {
 		return err
@@ -82,11 +144,6 @@ func (rk *RecordKeeper) RecordSongs(songs []internal.Song) error {
 func (rk *RecordKeeper) FetchSongs(desiredHashes []string) ([]internal.Song, error) {
 	var result []internal.Song
 
-	err := rk.prepareSongsTable()
-	if err != nil {
-		return result, err
-	}
-
 	const query = `
 		SELECT Path, Artist, Album, Title, Hash, Genre, AlbumArtist, TrackNumber, TotalTracks, DiscNumber, TotalDiscs 
         FROM Songs
@@ -99,6 +156,7 @@ func (rk *RecordKeeper) FetchSongs(desiredHashes []string) ([]internal.Song, err
 		`
 
 	var rows *sql.Rows
+	var err error
 
 	if len(desiredHashes) == 0 {
 		rows, err = rk.Query(query)

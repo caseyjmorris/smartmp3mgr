@@ -97,3 +97,18 @@ func TestInsertIdempotent(t *testing.T) {
 		t.Errorf("Records returned don't match.  \r\nExpected:  %v  \r\nActual:  %v", records, result)
 	}
 }
+
+func TestCacheFunctionality(t *testing.T) {
+	db, _ := Open(connectionString)
+	_ = db.CacheHash("ABC", "123")
+	_ = db.CacheHash("DEF", "456")
+	_ = db.CacheHash("ABC", "789")
+	result, _ := db.GetHashes()
+	expected := make(map[string]string)
+	expected["DEF"] = "456"
+	expected["ABC"] = "789"
+
+	if !reflect.DeepEqual(result, expected) {
+		t.Errorf("Records returned don't match.  \r\nExpected:  %v  \r\nActual:  %v", records, result)
+	}
+}
