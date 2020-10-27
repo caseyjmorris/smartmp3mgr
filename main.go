@@ -1,12 +1,14 @@
 package main
 
 import (
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"github.com/caseyjmorris/smartmp3mgr/files"
 	"github.com/caseyjmorris/smartmp3mgr/mp3"
 	"github.com/caseyjmorris/smartmp3mgr/records"
 	_ "github.com/mattn/go-sqlite3"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -119,6 +121,20 @@ func findNew() {
 	findNewCmd := flag.NewFlagSet("find-new", flag.ExitOnError)
 	newCmdDir := findNewCmd.String("directory", "", "directory")
 	newCmdDb := findNewCmd.String("dbPath", defaultDb, "path to sqlite db")
+	rehash := findNewCmd.Bool("rehash", false, "force a recalculation of existingFiles hashes")
+
+	db, err := records.Open(*newCmdDb)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	defer db.Close()
+
+	knownHashes, err := db.GetHashes()
+
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "failed to open db %q:  %s", *newCmdDb, err)
+	}
 
 	_ = findNewCmd.Parse(os.Args[2:])
 	info, err := os.Stat(*newCmdDir)
@@ -138,47 +154,56 @@ func findNew() {
 		os.Exit(1)
 	}
 
-	var parsed []mp3.Song
-	var hashes []string
-	for _, file := range mp3Files {
-		record, err := mp3.ParseMP3(file)
-		if err != nil {
-			continue
-		}
-		parsed = append(parsed, record)
-		hashes = append(hashes, record.Hash)
-	}
-	db, err := records.Open(*newCmdDb)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-	defer db.Close()
-
-	existing, err := db.FetchSongs()
+	existingFiles, err := db.FetchSongs()
 	existsMap := make(map[string]mp3.Song)
-
-	for _, existingRecord := range existing {
-		existsMap[existingRecord.Hash] = existingRecord
+	if !*rehash {
+		for _, existingRecord := range existingFiles {
+			existsMap[existingRecord.Hash] = existingRecord
+		}
 	}
-
 	uniq := 0
 
-	for _, parsedRecord := range parsed {
-		if _, ok := existsMap[parsedRecord.Hash]; ok {
-			continue
+	tx, err := db.Begin()
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "failed to start transaction:  %s\n", err)
+		os.Exit(1)
+	}
+
+	for _, file := range mp3Files {
+		var hashS string
+		if existing, ok := knownHashes[file]; ok {
+			hashS = existing
+		} else {
+			bytes, err := ioutil.ReadFile(file)
+			if err != nil {
+				continue
+			}
+			hash, err := mp3.Hash(bytes)
+			if err != nil {
+				continue
+			}
+			hashS = hex.EncodeToString(hash[:])
+			err = db.CacheHash(file, hashS)
+			if err != nil {
+				_, _ = fmt.Fprintf(os.Stderr, "failed to write cached hash:  %s\n", err)
+				os.Exit(1)
+			}
 		}
-		fmt.Println(parsedRecord.Path)
-		uniq++
+
+		if _, ok := existsMap[hashS]; !ok {
+			uniq++
+			fmt.Println(file)
+		}
+	}
+
+	err = tx.Commit()
+
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "failed to commit transaction:  %s\n", err)
+		os.Exit(1)
 	}
 
 	fmt.Printf("(%d new songs)", uniq)
-
-	if err != nil {
-		fmt.Println(err)
-		findNewCmd.Usage()
-		os.Exit(1)
-	}
 
 	os.Exit(0)
 }
