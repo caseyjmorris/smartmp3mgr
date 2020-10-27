@@ -9,6 +9,7 @@ import (
 
 type RecordKeeper struct {
 	*sql.DB
+	preparedStatementCache map[string]*sql.Stmt
 }
 
 func Open(connectionString string) (*RecordKeeper, error) {
@@ -16,7 +17,7 @@ func Open(connectionString string) (*RecordKeeper, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to sqlite db:  %s", err)
 	}
-	rk := &RecordKeeper{db}
+	rk := &RecordKeeper{db, map[string]*sql.Stmt{}}
 
 	err = rk.prepareSongsTable()
 	if err != nil {
@@ -28,6 +29,31 @@ func Open(connectionString string) (*RecordKeeper, error) {
 	}
 
 	return rk, nil
+}
+
+func (rk *RecordKeeper) Close() error {
+	var err error
+	for _, stmt := range rk.preparedStatementCache {
+		stmtErr := stmt.Close()
+		if stmtErr != nil {
+			err = stmtErr
+		}
+	}
+	closeErr := rk.DB.Close()
+	if closeErr != nil {
+		err = closeErr
+	}
+	return err
+}
+
+func (rk *RecordKeeper) Prepare(statement string) (*sql.Stmt, error) {
+	if stmt, ok := rk.preparedStatementCache[statement]; ok {
+		return stmt, nil
+	}
+	var err error
+	rk.preparedStatementCache[statement], err = rk.DB.Prepare(statement)
+
+	return rk.preparedStatementCache[statement], err
 }
 
 func (rk *RecordKeeper) prepareSongsTable() error {
