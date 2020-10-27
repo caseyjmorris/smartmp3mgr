@@ -83,12 +83,30 @@ func record() {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-	defer db.Close()
 
-	err = db.RecordSongs(parsed)
+	tx, err := db.Begin()
+
 	if err != nil {
-		fmt.Println(err)
-		recordCmd.Usage()
+		_, _ = fmt.Fprintf(os.Stderr, "error opening transaction:  %s\n", err)
+		os.Exit(1)
+	}
+
+	for _, parsedSong := range parsed {
+		err = db.RecordSong(parsedSong)
+		if err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "error saving %q:  %s\n", parsedSong.Path, err)
+			os.Exit(1)
+		}
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "error commiting transaction:  %s\n", err)
+		os.Exit(1)
+	}
+	err = db.Close()
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "error closign db:  %s\n", err)
 		os.Exit(1)
 	}
 
@@ -137,7 +155,7 @@ func findNew() {
 	}
 	defer db.Close()
 
-	existing, err := db.FetchSongs(hashes)
+	existing, err := db.FetchSongs()
 	existsMap := make(map[string]mp3.Song)
 
 	for _, existingRecord := range existing {

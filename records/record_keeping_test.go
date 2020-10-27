@@ -41,36 +41,21 @@ func TestRecordAndFetchSongs(t *testing.T) {
 	}
 	defer db.Close()
 
-	err = db.RecordSongs(records)
-	if err != nil {
-		t.Error(err)
+	tx, _ := db.Begin()
+	for _, record := range records {
+		err = db.RecordSong(record)
+		if err != nil {
+			t.Error(err)
+		}
 	}
-	result, err := db.FetchSongs([]string{})
+	_ = tx.Commit()
+
+	result, err := db.FetchSongs()
 	if err != nil {
 		t.Error(err)
 	}
 	if !reflect.DeepEqual(records, result) {
 		t.Errorf("Records returned don't match.  \r\nExpected:  %v  \r\nActual:  %v", records, result)
-	}
-}
-
-func TestFilteredFetchSongs(t *testing.T) {
-	db, err := Open(connectionString)
-	if err != nil {
-		t.Error(err)
-	}
-	defer db.Close()
-
-	err = db.RecordSongs(records)
-	if err != nil {
-		t.Error(err)
-	}
-	result, err := db.FetchSongs([]string{"cfdkfkslafj"})
-	if err != nil {
-		t.Error(err)
-	}
-	if !reflect.DeepEqual(records[1:], result) {
-		t.Errorf("Records returned don't match.  \r\nExpected:  %v  \r\nActual:  %v", records[1:], result)
 	}
 }
 
@@ -81,15 +66,24 @@ func TestInsertIdempotent(t *testing.T) {
 	}
 	defer db.Close()
 
-	err = db.RecordSongs(records)
-	if err != nil {
-		t.Error(err)
+	tx, _ := db.Begin()
+	for _, record := range records {
+		err = db.RecordSong(record)
+		if err != nil {
+			t.Error(err)
+		}
 	}
-	err = db.RecordSongs(records)
-	if err != nil {
-		t.Error(err)
+	_ = tx.Commit()
+	tx, _ = db.Begin()
+	for _, record := range records {
+		err = db.RecordSong(record)
+		if err != nil {
+			t.Error(err)
+		}
 	}
-	result, err := db.FetchSongs([]string{})
+	_ = tx.Commit()
+
+	result, err := db.FetchSongs()
 	if err != nil {
 		t.Error(err)
 	}

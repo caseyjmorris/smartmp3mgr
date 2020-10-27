@@ -98,7 +98,12 @@ func (rk *RecordKeeper) CacheHash(path string, hash string) error {
       ON CONFLICT(Path) DO UPDATE SET Hash=@Hash;
      `
 
-	_, err := rk.Exec(statement, path, hash)
+	exc, err := rk.Prepare(statement)
+	if err != nil {
+		return err
+	}
+
+	_, err = exc.Exec(path, hash)
 	if err != nil {
 		return fmt.Errorf("error saving hash %q for file %q:  %s", hash, path, err)
 	}
@@ -130,12 +135,7 @@ func (rk *RecordKeeper) GetHashes() (map[string]string, error) {
 	return result, nil
 }
 
-func (rk *RecordKeeper) RecordSongs(songs []mp3.Song) error {
-	tx, err := rk.Begin()
-	if err != nil {
-		return err
-	}
-
+func (rk *RecordKeeper) RecordSong(song mp3.Song) error {
 	const insertStatement = `
 		INSERT INTO Songs(Path, Artist, Album, Title, Hash, Genre, AlbumArtist, TrackNumber, TotalTracks, 
 		  DiscNumber, TotalDiscs)
@@ -151,23 +151,12 @@ func (rk *RecordKeeper) RecordSongs(songs []mp3.Song) error {
 		return err
 	}
 
-	for _, song := range songs {
-		_, err = insertPrepared.Exec(song.Path, song.Artist, song.Album, song.Title, song.Hash, song.Genre,
-			song.AlbumArtist, song.TrackNumber, song.TotalTracks, song.DiscNumber, song.TotalDiscs)
-		if err != nil {
-			return err
-		}
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return err
-	}
-
-	return nil
+	_, err = insertPrepared.Exec(song.Path, song.Artist, song.Album, song.Title, song.Hash, song.Genre,
+		song.AlbumArtist, song.TrackNumber, song.TotalTracks, song.DiscNumber, song.TotalDiscs)
+	return err
 }
 
-func (rk *RecordKeeper) FetchSongs(desiredHashes []string) ([]mp3.Song, error) {
+func (rk *RecordKeeper) FetchSongs() ([]mp3.Song, error) {
 	var result []mp3.Song
 
 	const query = `
@@ -175,59 +164,21 @@ func (rk *RecordKeeper) FetchSongs(desiredHashes []string) ([]mp3.Song, error) {
         FROM Songs
 		`
 
-	const filteredQuery = `
-		SELECT Path, Artist, Album, Title, s.Hash, Genre, AlbumArtist, TrackNumber, TotalTracks, DiscNumber, TotalDiscs 
-        FROM Songs s
-        INNER JOIN DesiredHashes dh ON dh.Hash = s.Hash 
-		`
-
 	var rows *sql.Rows
 	var err error
 
-	if len(desiredHashes) == 0 {
-		rows, err = rk.Query(query)
-	} else {
-		tx, err := rk.Begin()
-		if err != nil {
-			return result, err
-		}
+	qry, err := rk.Prepare(query)
+	if err != nil {
+		return result, err
+	}
 
-		_, err = rk.Exec("CREATE TEMPORARY TABLE DesiredHashes(hash TEXT NOT NULL)")
-		if err != nil {
-			return result, err
-		}
+	rows, err = qry.Query()
 
-		const insertSQL = `
-			INSERT INTO DesiredHashes(hash) VALUES (?)
-			`
-
-		stmt, err := rk.Prepare(insertSQL)
-		if err != nil {
-			return result, err
-		}
-
-		for _, hash := range desiredHashes {
-			_, err = stmt.Exec(hash)
-			if err != nil {
-				return result, err
-			}
-		}
-
-		err = tx.Commit()
-		if err != nil {
-			return result, err
-		}
-
-		rows, err = rk.Query(filteredQuery)
-		if err != nil {
-			return result, err
-		}
+	if err != nil {
+		return result, err
 	}
 
 	defer rows.Close()
-	if err != nil {
-		return result, nil
-	}
 
 	for rows.Next() {
 		var song mp3.Song
