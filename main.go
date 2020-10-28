@@ -122,10 +122,15 @@ func findNew() {
 	newCmdDir := findNewCmd.String("directory", "", "directory")
 	newCmdDb := findNewCmd.String("dbPath", defaultDb, "path to sqlite db")
 	rehash := findNewCmd.Bool("rehash", false, "force a recalculation of existingFiles hashes")
+	err := findNewCmd.Parse(os.Args[2:])
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "%s", err)
+		os.Exit(1)
+	}
 
 	db, err := records.Open(*newCmdDb)
 	if err != nil {
-		fmt.Println(err)
+		_, _ = fmt.Fprintf(os.Stderr, "%s", err)
 		os.Exit(1)
 	}
 	defer db.Close()
@@ -136,7 +141,6 @@ func findNew() {
 		_, _ = fmt.Fprintf(os.Stderr, "failed to open db %q:  %s", *newCmdDb, err)
 	}
 
-	_ = findNewCmd.Parse(os.Args[2:])
 	info, err := os.Stat(*newCmdDir)
 	if (err != nil && os.IsNotExist(err)) || !info.IsDir() {
 		fmt.Printf("%q is not a directory\n", *newCmdDir)
