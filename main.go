@@ -238,8 +238,8 @@ func findNew() {
 		if _, ok := existsMap[hashS]; !ok {
 			uniq++
 			results = append(results, file)
-			_ = bar.Add(1)
 		}
+		_ = bar.Add(1)
 	}
 
 	err = tx.Commit()
