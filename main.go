@@ -51,9 +51,9 @@ func record() {
 		_, _ = fmt.Fprintf(os.Stderr, "error parsing:  %s", err)
 	}
 
-	info, err := os.Stat(*args.directory)
+	info, err := os.Stat(args.directory)
 	if (err != nil && os.IsNotExist(err)) || !info.IsDir() {
-		fmt.Printf("%q is not a directory\n", *args.directory)
+		fmt.Printf("%q is not a directory\n", args.directory)
 		if strings.HasSuffix(os.Args[2], "\\\"") {
 			fmt.Println("hint:  are you on Windows and using a quoted directory with the trailing backslash?")
 		}
@@ -61,10 +61,10 @@ func record() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("Scanning %q for MP3s\n", *args.directory)
-	mp3Files, err := files.FindMP3Files(*args.directory)
+	fmt.Printf("Scanning %q for MP3s\n", args.directory)
+	mp3Files, err := files.FindMP3Files(args.directory)
 
-	db, err := records.Open(*args.dbPath)
+	db, err := records.Open(args.dbPath)
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -78,7 +78,7 @@ func record() {
 
 	existingMap := make(map[string]mp3.Song)
 
-	if !*args.reparse {
+	if !args.reparse {
 		for _, existingFile := range existing {
 			existingMap[existingFile.Path] = existingFile
 		}
@@ -110,7 +110,7 @@ func record() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("Updating database at %q\n", *args.dbPath)
+	fmt.Printf("Updating database at %q\n", args.dbPath)
 
 	bar = progressbar.Default(int64(len(parsed)))
 	for _, parsedSong := range parsed {
@@ -147,7 +147,7 @@ func findNew() {
 		os.Exit(1)
 	}
 
-	db, err := records.Open(*args.dbPath)
+	db, err := records.Open(args.dbPath)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "%s", err)
 		os.Exit(1)
@@ -157,12 +157,12 @@ func findNew() {
 	knownHashes, err := db.GetHashes()
 
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "failed to open db %q:  %s", *args.dbPath, err)
+		_, _ = fmt.Fprintf(os.Stderr, "failed to open db %q:  %s", args.dbPath, err)
 	}
 
-	info, err := os.Stat(*args.directory)
+	info, err := os.Stat(args.directory)
 	if (err != nil && os.IsNotExist(err)) || !info.IsDir() {
-		fmt.Printf("%q is not a directory\n", *args.directory)
+		fmt.Printf("%q is not a directory\n", args.directory)
 		if strings.HasSuffix(os.Args[2], "\\\"") {
 			fmt.Println("hint:  are you on Windows and using a quoted directory with the trailing backslash?")
 		}
@@ -170,9 +170,9 @@ func findNew() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("Looking for files in %q\n", *args.directory)
+	fmt.Printf("Looking for files in %q\n", args.directory)
 
-	mp3Files, err := files.FindMP3Files(*args.directory)
+	mp3Files, err := files.FindMP3Files(args.directory)
 
 	if err != nil {
 		fmt.Println(err)
@@ -180,8 +180,8 @@ func findNew() {
 	}
 
 	existsMap := make(map[string]mp3.Song)
-	if !*args.rehash {
-		fmt.Printf("Checking existing records in DB %q\n", *args.dbPath)
+	if !args.rehash {
+		fmt.Printf("Checking existing records in DB %q\n", args.dbPath)
 		existingFiles, err := db.FetchSongs()
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "Error reading database:  %s\n", err)
@@ -198,7 +198,7 @@ func findNew() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("Hashing %d files and comparing against existing records in DB %q\n", len(mp3Files), *args.dbPath)
+	fmt.Printf("Hashing %d files and comparing against existing records in DB %q\n", len(mp3Files), args.dbPath)
 
 	bar := progressbar.Default(int64(len(mp3Files)))
 	var results []string

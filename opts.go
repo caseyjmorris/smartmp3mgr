@@ -12,15 +12,15 @@ var homeDir, _ = os.UserHomeDir()
 var defaultDb = filepath.Join(homeDir, ".smartmp3mgr.sql")
 
 type findNewArgs struct {
-	directory *string
-	dbPath    *string
-	rehash    *bool
+	directory string
+	dbPath    string
+	rehash    bool
 }
 
 type recordArgs struct {
-	directory *string
-	dbPath    *string
-	reparse   *bool
+	directory string
+	dbPath    string
+	reparse   bool
 }
 
 func parseFindNewArgs() (result findNewArgs, err error) {
@@ -32,7 +32,7 @@ func parseFindNewArgs() (result findNewArgs, err error) {
 		return
 	}
 
-	result = findNewArgs{newCmdDir, newCmdDb, rehash}
+	result = findNewArgs{*newCmdDir, *newCmdDb, *rehash}
 	return
 }
 
@@ -46,9 +46,9 @@ func parseRecordArgs() (result recordArgs, err error) {
 	}
 
 	result = recordArgs{
-		directory: recordDir,
-		dbPath:    recordDb,
-		reparse:   rehash,
+		directory: *recordDir,
+		dbPath:    *recordDb,
+		reparse:   *rehash,
 	}
 	return
 }
