@@ -8,6 +8,7 @@ import (
 	"github.com/caseyjmorris/smartmp3mgr/records"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/schollz/progressbar/v3"
+	"io"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -19,61 +20,70 @@ func main() {
 		os.Exit(1)
 	}
 
+	prf := func(max int64, description ...string) progressReporter {
+		return progressbar.Default(max, description...)
+	}
+
 	switch os.Args[1] {
 	case "sum":
-		sum()
+		sum(os.Stdout, os.Stdin)
 	case "record":
-		record()
+		record(os.Stdout, os.Stderr, prf)
 	case "find-new":
 		findNew()
 	default:
-		fmt.Println("Usage:  smartmp3mgr (sum|record|find-new) (args)")
-		os.Exit(1)
+		diePrintln(os.Stderr, "Usage:  smartmp3mgr (sum|record|find-new) (args)")
 	}
 }
 
-func sum() {
+func diePrintf(w io.Writer, format string, args ...interface{}) {
+	_, _ = fmt.Fprintf(w, format, args)
+	os.Exit(1)
+}
+
+func diePrintln(w io.Writer, a ...interface{}) {
+	_, _ = fmt.Fprintln(w, a)
+	os.Exit(1)
+}
+
+func sum(stdout io.Writer, stderr io.Writer) {
 	for _, file := range os.Args[2:] {
 		track, err := mp3.ParseMP3(file)
 		if err != nil {
-			fmt.Println(err)
-			fmt.Println("usage:  smartmp3mgr sum [files]")
-			os.Exit(1)
+			diePrintf(stderr, "%s\nusage:  smartmp3mgr sum [files]")
 		}
-		fmt.Printf("%q:  %s\n", file, track.Hash)
+		_, _ = fmt.Fprintf(stdout, "%q:  %s\n", file, track.Hash)
 	}
 	os.Exit(0)
 }
 
-func record() {
+func record(stdout io.Writer, stderr io.Writer, pb progressReporterFactory) {
 	args, err := parseRecordArgs()
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "error parsing:  %s", err)
+		diePrintf(stderr, "error parsing:  %s", err)
 	}
 
 	info, err := os.Stat(args.directory)
 	if (err != nil && os.IsNotExist(err)) || !info.IsDir() {
-		fmt.Printf("%q is not a directory\n", args.directory)
+		_, _ = fmt.Fprintf(stderr, "%q is not a directory\n", args.directory)
 		if strings.HasSuffix(os.Args[2], "\\\"") {
-			fmt.Println("hint:  are you on Windows and using a quoted directory with the trailing backslash?")
+			_, _ = fmt.Fprintf(stderr, "hint:  are you on Windows and using a quoted directory with the trailing backslash?")
 		}
 		recordCmd.Usage()
 		os.Exit(1)
 	}
 
-	fmt.Printf("Scanning %q for MP3s\n", args.directory)
+	_, _ = fmt.Fprintf(stdout, "Scanning %q for MP3s\n", args.directory)
 	mp3Files, err := files.FindMP3Files(args.directory)
 
 	db, err := records.Open(args.dbPath)
 	if err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		diePrintln(stderr, err)
 	}
 
 	existing, err := db.FetchSongs()
 	if err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		diePrintln(stderr, err)
 	}
 
 	existingMap := make(map[string]mp3.Song)
@@ -84,9 +94,9 @@ func record() {
 		}
 	}
 
-	fmt.Printf("Scanning %d files\n", len(mp3Files))
+	_, _ = fmt.Fprintf(stdout, "Scanning %d files\n", len(mp3Files))
 
-	bar := progressbar.Default(int64(len(mp3Files)))
+	bar := pb(int64(len(mp3Files)))
 
 	var parsed []mp3.Song
 	for _, file := range mp3Files {
@@ -106,13 +116,12 @@ func record() {
 	tx, err := db.Begin()
 
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "error opening transaction:  %s\n", err)
-		os.Exit(1)
+		diePrintf(stderr, "error opening transaction:  %s\n", err)
 	}
 
-	fmt.Printf("Updating database at %q\n", args.dbPath)
+	_, _ = fmt.Fprintf(stdout, "Updating database at %q\n", args.dbPath)
 
-	bar = progressbar.Default(int64(len(parsed)))
+	bar = pb(int64(len(parsed)))
 	for _, parsedSong := range parsed {
 		if _, ok := existingMap[parsedSong.Path]; ok {
 			_ = bar.Add(1)
@@ -120,21 +129,18 @@ func record() {
 		}
 		err = db.RecordSong(parsedSong)
 		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "error saving %q:  %s\n", parsedSong.Path, err)
-			os.Exit(1)
+			diePrintf(stderr, "error saving %q:  %s\n", parsedSong.Path, err)
 		}
 		_ = bar.Add(1)
 	}
 
 	err = tx.Commit()
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "error commiting transaction:  %s\n", err)
-		os.Exit(1)
+		diePrintf(stderr, "error commiting transaction:  %s\n", err)
 	}
 	err = db.Close()
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "error closign db:  %s\n", err)
-		os.Exit(1)
+		diePrintf(stderr, "error closign db:  %s\n", err)
 	}
 
 	os.Exit(0)
