@@ -28,41 +28,34 @@ func main() {
 	case "sum":
 		sum(os.Stdout, os.Stdin)
 	case "record":
-		record(os.Stdout, os.Stderr, prf)
+		args, err := parseRecordArgs()
+		if err != nil {
+			diePrintf(os.Stderr, "error parsing:  %s", err)
+		}
+		record(os.Stdout, os.Stderr, prf, args)
 	case "find-new":
-		findNew()
+		args, err := parseFindNewArgs()
+		if err != nil {
+			diePrintf(os.Stderr, "%s", err)
+		}
+		findNew(os.Stdout, os.Stderr, prf, args)
 	default:
 		diePrintln(os.Stderr, "Usage:  smartmp3mgr (sum|record|find-new) (args)")
 	}
-}
-
-func diePrintf(w io.Writer, format string, args ...interface{}) {
-	_, _ = fmt.Fprintf(w, format, args)
-	os.Exit(1)
-}
-
-func diePrintln(w io.Writer, a ...interface{}) {
-	_, _ = fmt.Fprintln(w, a)
-	os.Exit(1)
 }
 
 func sum(stdout io.Writer, stderr io.Writer) {
 	for _, file := range os.Args[2:] {
 		track, err := mp3.ParseMP3(file)
 		if err != nil {
-			diePrintf(stderr, "%s\nusage:  smartmp3mgr sum [files]")
+			diePrintf(stderr, "%s\nusage:  smartmp3mgr sum [files]", err)
 		}
 		_, _ = fmt.Fprintf(stdout, "%q:  %s\n", file, track.Hash)
 	}
 	os.Exit(0)
 }
 
-func record(stdout io.Writer, stderr io.Writer, pb progressReporterFactory) {
-	args, err := parseRecordArgs()
-	if err != nil {
-		diePrintf(stderr, "error parsing:  %s", err)
-	}
-
+func record(stdout io.Writer, stderr io.Writer, pb progressReporterFactory, args recordArgs) {
 	info, err := os.Stat(args.directory)
 	if (err != nil && os.IsNotExist(err)) || !info.IsDir() {
 		_, _ = fmt.Fprintf(stderr, "%q is not a directory\n", args.directory)
@@ -146,16 +139,10 @@ func record(stdout io.Writer, stderr io.Writer, pb progressReporterFactory) {
 	os.Exit(0)
 }
 
-func findNew() {
-	args, err := parseFindNewArgs()
-	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "%s", err)
-		os.Exit(1)
-	}
-
+func findNew(stdout io.Writer, stderr io.Writer, prf progressReporterFactory, args findNewArgs) {
 	db, err := records.Open(args.dbPath)
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "%s", err)
+		_, _ = fmt.Fprintf(stderr, "%s", err)
 		os.Exit(1)
 	}
 	defer db.Close()
@@ -163,34 +150,33 @@ func findNew() {
 	knownHashes, err := db.GetHashes()
 
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "failed to open db %q:  %s", args.dbPath, err)
+		_, _ = fmt.Fprintf(stderr, "failed to open db %q:  %s", args.dbPath, err)
 	}
 
 	info, err := os.Stat(args.directory)
 	if (err != nil && os.IsNotExist(err)) || !info.IsDir() {
-		fmt.Printf("%q is not a directory\n", args.directory)
+		_, _ = fmt.Fprintf(stderr, "%q is not a directory\n", args.directory)
 		if strings.HasSuffix(os.Args[2], "\\\"") {
-			fmt.Println("hint:  are you on Windows and using a quoted directory with the trailing backslash?")
+			_, _ = fmt.Fprintln(stderr, "hint:  are you on Windows and using a quoted directory with the trailing backslash?")
 		}
 		findNewCmd.Usage()
 		os.Exit(1)
 	}
 
-	fmt.Printf("Looking for files in %q\n", args.directory)
+	_, _ = fmt.Fprintf(stdout, "Looking for files in %q\n", args.directory)
 
 	mp3Files, err := files.FindMP3Files(args.directory)
 
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		diePrintln(stdout, err)
 	}
 
 	existsMap := make(map[string]mp3.Song)
 	if !args.rehash {
-		fmt.Printf("Checking existing records in DB %q\n", args.dbPath)
+		_, _ = fmt.Fprintf(stdout, "Checking existing records in DB %q\n", args.dbPath)
 		existingFiles, err := db.FetchSongs()
 		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "Error reading database:  %s\n", err)
+			diePrintf(stderr, "Error reading database:  %s\n", err)
 		}
 		for _, existingRecord := range existingFiles {
 			existsMap[existingRecord.Hash] = existingRecord
@@ -200,11 +186,10 @@ func findNew() {
 
 	tx, err := db.Begin()
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "failed to start transaction:  %s\n", err)
-		os.Exit(1)
+		diePrintf(stderr, "failed to start transaction:  %s\n", err)
 	}
 
-	fmt.Printf("Hashing %d files and comparing against existing records in DB %q\n", len(mp3Files), args.dbPath)
+	_, _ = fmt.Fprintf(stdout, "Hashing %d files and comparing against existing records in DB %q\n", len(mp3Files), args.dbPath)
 
 	bar := progressbar.Default(int64(len(mp3Files)))
 	var results []string
@@ -225,8 +210,7 @@ func findNew() {
 			hashS = hex.EncodeToString(hash[:])
 			err = db.CacheHash(file, hashS)
 			if err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, "failed to write cached hash:  %s\n", err)
-				os.Exit(1)
+				diePrintf(stderr, "failed to write cached hash:  %s\n", err)
 			}
 		}
 
@@ -240,15 +224,24 @@ func findNew() {
 	err = tx.Commit()
 
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "failed to commit transaction:  %s\n", err)
-		os.Exit(1)
+		diePrintf(stderr, "failed to commit transaction:  %s\n", err)
 	}
 
 	for _, result := range results {
-		fmt.Println(result)
+		fmt.Fprintln(stdout, result)
 	}
 
-	fmt.Printf("(%d new songs)\n", uniq)
+	_, _ = fmt.Fprintf(stdout, "(%d new songs)\n", uniq)
 
 	os.Exit(0)
+}
+
+func diePrintf(w io.Writer, format string, args ...interface{}) {
+	_, _ = fmt.Fprintf(w, format, args...)
+	os.Exit(1)
+}
+
+func diePrintln(w io.Writer, a ...interface{}) {
+	_, _ = fmt.Fprintln(w, a...)
+	os.Exit(1)
 }
