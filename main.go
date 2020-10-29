@@ -26,7 +26,7 @@ func main() {
 
 	switch os.Args[1] {
 	case "sum":
-		sum(os.Stdout, os.Stdin)
+		sum(os.Stdout, os.Stdin, os.Args[2:])
 	case "record":
 		args, err := parseRecordArgs()
 		if err != nil {
@@ -42,17 +42,18 @@ func main() {
 	default:
 		diePrintln(os.Stderr, "Usage:  smartmp3mgr (sum|record|find-new) (args)")
 	}
+
+	os.Exit(0)
 }
 
-func sum(stdout io.Writer, stderr io.Writer) {
-	for _, file := range os.Args[2:] {
+func sum(stdout io.Writer, stderr io.Writer, paths []string) {
+	for _, file := range paths {
 		track, err := mp3.ParseMP3(file)
 		if err != nil {
 			diePrintf(stderr, "%s\nusage:  smartmp3mgr sum [files]", err)
 		}
 		_, _ = fmt.Fprintf(stdout, "%q:  %s\n", file, track.Hash)
 	}
-	os.Exit(0)
 }
 
 func record(stdout io.Writer, stderr io.Writer, pb progressReporterFactory, args recordArgs) {
@@ -135,8 +136,6 @@ func record(stdout io.Writer, stderr io.Writer, pb progressReporterFactory, args
 	if err != nil {
 		diePrintf(stderr, "error closing db:  %s\n", err)
 	}
-
-	os.Exit(0)
 }
 
 func findNew(stdout io.Writer, stderr io.Writer, prf progressReporterFactory, args findNewArgs) {
@@ -232,8 +231,6 @@ func findNew(stdout io.Writer, stderr io.Writer, prf progressReporterFactory, ar
 	}
 
 	_, _ = fmt.Fprintf(stdout, "(%d new songs)\n", uniq)
-
-	os.Exit(0)
 }
 
 func diePrintf(w io.Writer, format string, args ...interface{}) {
