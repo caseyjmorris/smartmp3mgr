@@ -129,11 +129,11 @@ func record(stdout io.Writer, stderr io.Writer, pb progressReporterFactory, args
 
 	err = tx.Commit()
 	if err != nil {
-		diePrintf(stderr, "error commiting transaction:  %s\n", err)
+		diePrintf(stderr, "error committing transaction:  %s\n", err)
 	}
 	err = db.Close()
 	if err != nil {
-		diePrintf(stderr, "error closign db:  %s\n", err)
+		diePrintf(stderr, "error closing db:  %s\n", err)
 	}
 
 	os.Exit(0)
@@ -191,7 +191,7 @@ func findNew(stdout io.Writer, stderr io.Writer, prf progressReporterFactory, ar
 
 	_, _ = fmt.Fprintf(stdout, "Hashing %d files and comparing against existing records in DB %q\n", len(mp3Files), args.dbPath)
 
-	bar := progressbar.Default(int64(len(mp3Files)))
+	bar := prf(int64(len(mp3Files)))
 	var results []string
 
 	for _, file := range mp3Files {
