@@ -1,4 +1,4 @@
-package mp3
+package mp3util
 
 import (
 	"crypto/sha256"

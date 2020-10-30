@@ -1,12 +1,12 @@
 package records
 
 import (
-	"github.com/caseyjmorris/smartmp3mgr/mp3"
+	"github.com/caseyjmorris/smartmp3mgr/mp3util"
 	"reflect"
 	"testing"
 )
 
-var records = []mp3.Song{{
+var records = []mp3util.Song{{
 	Path:        "c:\\Users\\Casey\\Song1.mp3",
 	Artist:      "Starpoint",
 	Album:       "Restless",

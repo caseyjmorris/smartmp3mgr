@@ -3,8 +3,8 @@ package main
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/caseyjmorris/smartmp3mgr/files"
-	"github.com/caseyjmorris/smartmp3mgr/mp3"
+	"github.com/caseyjmorris/smartmp3mgr/mp3fileutil"
+	"github.com/caseyjmorris/smartmp3mgr/mp3util"
 	"github.com/caseyjmorris/smartmp3mgr/records"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/schollz/progressbar/v3"
@@ -67,17 +67,17 @@ func sum(stdout io.Writer, stderr io.Writer, args sumArgs) {
 		os.Exit(1)
 	}
 
-	mp3files, err := files.FindMP3Files(args.directory)
+	mp3files, err := mp3fileutil.FindMP3Files(args.directory)
 	if err != nil {
 		diePrintln(stderr, err)
 	}
 
 	q := make(chan string, len(mp3files))
 	sink := make(chan struct {
-		song mp3.Song
+		song mp3util.Song
 		err  error
 	}, len(mp3files))
-	var r []mp3.Song
+	var r []mp3util.Song
 
 	for _, file := range mp3files {
 		q <- file
@@ -91,13 +91,13 @@ func sum(stdout io.Writer, stderr io.Writer, args sumArgs) {
 
 	for i := 0; i < dop; i++ {
 		go func(q <-chan string, sink chan<- struct {
-			song mp3.Song
+			song mp3util.Song
 			err  error
 		}) {
 			for el := range q {
-				res, err := mp3.ParseMP3(el)
+				res, err := mp3util.ParseMP3(el)
 				x := struct {
-					song mp3.Song
+					song mp3util.Song
 					err  error
 				}{res, err}
 				sink <- x
@@ -138,7 +138,7 @@ func record(stdout io.Writer, stderr io.Writer, pb progressReporterFactory, args
 	}
 
 	_, _ = fmt.Fprintf(stdout, "Scanning %q for MP3s\n", args.directory)
-	mp3Files, err := files.FindMP3Files(args.directory)
+	mp3Files, err := mp3fileutil.FindMP3Files(args.directory)
 
 	db, err := records.Open(args.dbPath)
 	if err != nil {
@@ -150,7 +150,7 @@ func record(stdout io.Writer, stderr io.Writer, pb progressReporterFactory, args
 		diePrintln(stderr, err)
 	}
 
-	existingMap := make(map[string]mp3.Song)
+	existingMap := make(map[string]mp3util.Song)
 
 	if !args.reparse {
 		for _, existingFile := range existing {
@@ -162,13 +162,13 @@ func record(stdout io.Writer, stderr io.Writer, pb progressReporterFactory, args
 
 	bar := pb(int64(len(mp3Files)))
 
-	var parsed []mp3.Song
+	var parsed []mp3util.Song
 	for _, file := range mp3Files {
-		var record mp3.Song
+		var record mp3util.Song
 		if cached, ok := existingMap[file]; ok {
 			record = cached
 		} else {
-			record, err = mp3.ParseMP3(file)
+			record, err = mp3util.ParseMP3(file)
 			if err != nil {
 				continue
 			}
@@ -234,13 +234,13 @@ func findNew(stdout io.Writer, stderr io.Writer, prf progressReporterFactory, ar
 
 	_, _ = fmt.Fprintf(stdout, "Looking for files in %q\n", args.directory)
 
-	mp3Files, err := files.FindMP3Files(args.directory)
+	mp3Files, err := mp3fileutil.FindMP3Files(args.directory)
 
 	if err != nil {
 		diePrintln(stdout, err)
 	}
 
-	existsMap := make(map[string]mp3.Song)
+	existsMap := make(map[string]mp3util.Song)
 	if !args.rehash {
 		_, _ = fmt.Fprintf(stdout, "Checking existing records in DB %q\n", args.dbPath)
 		existingFiles, err := db.FetchSongs()
@@ -272,7 +272,7 @@ func findNew(stdout io.Writer, stderr io.Writer, prf progressReporterFactory, ar
 			if err != nil {
 				continue
 			}
-			hash, err := mp3.Hash(bytes)
+			hash, err := mp3util.Hash(bytes)
 			if err != nil {
 				continue
 			}

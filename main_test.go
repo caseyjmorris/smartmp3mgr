@@ -3,8 +3,8 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"github.com/caseyjmorris/smartmp3mgr/files"
-	"github.com/caseyjmorris/smartmp3mgr/mp3"
+	"github.com/caseyjmorris/smartmp3mgr/mp3fileutil"
+	"github.com/caseyjmorris/smartmp3mgr/mp3util"
 	"github.com/caseyjmorris/smartmp3mgr/records"
 	"github.com/caseyjmorris/smartmp3mgr/testHelpers"
 	"io/ioutil"
@@ -30,11 +30,11 @@ func newTestProgressBar(max int64, description ...string) progressReporter {
 
 func TestSum(t *testing.T) {
 	path := testHelpers.GetFixturePath("")
-	mp3s, _ := files.FindMP3Files(path)
+	mp3s, _ := mp3fileutil.FindMP3Files(path)
 	expected := new(bytes.Buffer)
 	for _, track := range mp3s {
 		fileBytes, _ := ioutil.ReadFile(track)
-		hash, _ := mp3.Hash(fileBytes)
+		hash, _ := mp3util.Hash(fileBytes)
 		fmt.Fprintf(expected, "%q:  %x\n", track, hash)
 	}
 	stdout, stderr := new(bytes.Buffer), new(bytes.Buffer)

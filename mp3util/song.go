@@ -1,4 +1,4 @@
-package mp3
+package mp3util
 
 type Song struct {
 	Path, Artist, Album, Title, Hash, Genre, AlbumArtist string

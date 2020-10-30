@@ -3,7 +3,7 @@ package records
 import (
 	"database/sql"
 	"fmt"
-	"github.com/caseyjmorris/smartmp3mgr/mp3"
+	"github.com/caseyjmorris/smartmp3mgr/mp3util"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -135,7 +135,7 @@ func (rk *RecordKeeper) GetHashes() (map[string]string, error) {
 	return result, nil
 }
 
-func (rk *RecordKeeper) RecordSong(song mp3.Song) error {
+func (rk *RecordKeeper) RecordSong(song mp3util.Song) error {
 	const insertStatement = `
 		INSERT INTO Songs(Path, Artist, Album, Title, Hash, Genre, AlbumArtist, TrackNumber, TotalTracks, 
 		  DiscNumber, TotalDiscs)
@@ -156,8 +156,8 @@ func (rk *RecordKeeper) RecordSong(song mp3.Song) error {
 	return err
 }
 
-func (rk *RecordKeeper) FetchSongs() ([]mp3.Song, error) {
-	var result []mp3.Song
+func (rk *RecordKeeper) FetchSongs() ([]mp3util.Song, error) {
+	var result []mp3util.Song
 
 	const query = `
 		SELECT Path, Artist, Album, Title, Hash, Genre, AlbumArtist, TrackNumber, TotalTracks, DiscNumber, TotalDiscs 
@@ -181,7 +181,7 @@ func (rk *RecordKeeper) FetchSongs() ([]mp3.Song, error) {
 	defer rows.Close()
 
 	for rows.Next() {
-		var song mp3.Song
+		var song mp3util.Song
 		err = rows.Scan(&song.Path, &song.Artist, &song.Album, &song.Title, &song.Hash, &song.Genre, &song.AlbumArtist,
 			&song.TrackNumber, &song.TotalTracks, &song.DiscNumber, &song.TotalDiscs)
 		if err != nil {

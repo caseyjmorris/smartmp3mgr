@@ -1,4 +1,4 @@
-package mp3
+package mp3util
 
 import (
 	"github.com/caseyjmorris/smartmp3mgr/testHelpers"

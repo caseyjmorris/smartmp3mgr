@@ -1,4 +1,4 @@
-package files
+package mp3fileutil
 
 import (
 	"os"
