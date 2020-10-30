@@ -58,13 +58,18 @@ func TestRecord(t *testing.T) {
 	_ = dbf.Close()
 	defer os.Remove(dbPath)
 	args := recordArgs{
-		directory: path,
-		dbPath:    dbPath,
-		reparse:   false,
+		directory:           path,
+		dbPath:              dbPath,
+		reparse:             false,
+		degreeOfParallelism: 20,
 	}
 
 	for i := 0; i < 4; i++ {
 		record(stdout, stderr, newTestProgressBar, args)
+	}
+
+	if stderr.String() != "" {
+		t.Error(stderr)
 	}
 
 	rk, _ := records.Open(dbPath)

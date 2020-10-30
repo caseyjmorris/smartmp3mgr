@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"os"
 	"path/filepath"
@@ -24,15 +25,19 @@ type findNewArgs struct {
 }
 
 type recordArgs struct {
-	directory string
-	dbPath    string
-	reparse   bool
+	degreeOfParallelism int
+	directory           string
+	dbPath              string
+	reparse             bool
 }
 
 func parseSumArgs() (result sumArgs, err error) {
 	dop := sumCmd.Int("dop", 20, "degree of parallelism")
 	d := sumCmd.String("directory", "", "directory for files to sum")
 	err = sumCmd.Parse(os.Args[2:])
+	if err == nil && *dop < 1 {
+		err = errors.New("dop must be greater than zero")
+	}
 	if err != nil {
 		return
 	}
@@ -62,15 +67,20 @@ func parseRecordArgs() (result recordArgs, err error) {
 	recordDir := recordCmd.String("directory", "", "directory")
 	recordDb := recordCmd.String("dbPath", defaultDb, "path to sqlite db")
 	rehash := recordCmd.Bool("reparse", false, "force a rehash of reparse files")
+	dop := recordCmd.Int("dop", 20, "degree of parallelism")
 	err = recordCmd.Parse(os.Args[2:])
+	if err == nil && *dop < 1 {
+		err = errors.New("dop must be greater than zero")
+	}
 	if err != nil {
 		return
 	}
 
 	result = recordArgs{
-		directory: *recordDir,
-		dbPath:    *recordDb,
-		reparse:   *rehash,
+		degreeOfParallelism: *dop,
+		directory:           *recordDir,
+		dbPath:              *recordDb,
+		reparse:             *rehash,
 	}
 	return
 }

@@ -17,6 +17,11 @@ import (
 	"sync"
 )
 
+type maybeSong struct {
+	song mp3util.Song
+	err  error
+}
+
 func main() {
 	if len(os.Args) < 3 {
 		fmt.Println("Usage:  smartmp3mgr (sum|record|find-new) (args)")
@@ -54,9 +59,6 @@ func main() {
 }
 
 func sum(stdout io.Writer, stderr io.Writer, args sumArgs) {
-	if args.degreeOfParallelism < 1 {
-		diePrintln(stderr, "Degree of parallelism must be greater than 0")
-	}
 	info, err := os.Stat(args.directory)
 	if (err != nil && os.IsNotExist(err)) || !info.IsDir() {
 		_, _ = fmt.Fprintf(stderr, "%q is not a directory\n", args.directory)
@@ -73,10 +75,7 @@ func sum(stdout io.Writer, stderr io.Writer, args sumArgs) {
 	}
 
 	q := make(chan string, len(mp3files))
-	sink := make(chan struct {
-		song mp3util.Song
-		err  error
-	}, len(mp3files))
+	sink := make(chan maybeSong, len(mp3files))
 	var r []mp3util.Song
 
 	for _, file := range mp3files {
@@ -90,17 +89,13 @@ func sum(stdout io.Writer, stderr io.Writer, args sumArgs) {
 	wg.Add(len(mp3files))
 
 	for i := 0; i < dop; i++ {
-		go func(q <-chan string, sink chan<- struct {
-			song mp3util.Song
-			err  error
-		}) {
+		go func(q <-chan string, sink chan<- maybeSong) {
 			for el := range q {
 				res, err := mp3util.ParseMP3(el)
-				x := struct {
-					song mp3util.Song
-					err  error
-				}{res, err}
-				sink <- x
+				sink <- maybeSong{
+					song: res,
+					err:  err,
+				}
 			}
 		}(q, sink)
 	}
@@ -140,6 +135,12 @@ func record(stdout io.Writer, stderr io.Writer, pb progressReporterFactory, args
 	_, _ = fmt.Fprintf(stdout, "Scanning %q for MP3s\n", args.directory)
 	mp3Files, err := mp3fileutil.FindMP3Files(args.directory)
 
+	fileQ := make(chan string, len(mp3Files))
+
+	for _, file := range mp3Files {
+		fileQ <- file
+	}
+
 	db, err := records.Open(args.dbPath)
 	if err != nil {
 		diePrintln(stderr, err)
@@ -162,20 +163,41 @@ func record(stdout io.Writer, stderr io.Writer, pb progressReporterFactory, args
 
 	bar := pb(int64(len(mp3Files)))
 
-	var parsed []mp3util.Song
-	for _, file := range mp3Files {
-		var record mp3util.Song
-		if cached, ok := existingMap[file]; ok {
-			record = cached
-		} else {
-			record, err = mp3util.ParseMP3(file)
-			if err != nil {
-				continue
+	songQ := make(chan mp3util.Song, len(mp3Files))
+	doneQ := make(chan int, len(mp3Files))
+	var wg sync.WaitGroup
+	var wg2 sync.WaitGroup
+	for i := 0; i < args.degreeOfParallelism; i++ {
+		go func(songQ chan<- mp3util.Song, doneQ chan<- int) {
+			for file := range fileQ {
+				var record mp3util.Song
+				if cached, ok := existingMap[file]; ok {
+					record = cached
+				} else {
+					record, err = mp3util.ParseMP3(file)
+					if err != nil {
+						continue
+					}
+				}
+				songQ <- record
+				doneQ <- 1
+				wg.Add(1)
+				wg2.Add(2)
 			}
-		}
-		parsed = append(parsed, record)
-		_ = bar.Add(1)
+		}(songQ, doneQ)
 	}
+
+	var ct int64
+
+	go func(doneQ <-chan int) {
+		for i := range doneQ {
+			ct++
+			_ = bar.Add(i)
+			wg.Done()
+		}
+	}(doneQ)
+
+	wg.Wait()
 
 	tx, err := db.Begin()
 
@@ -185,18 +207,23 @@ func record(stdout io.Writer, stderr io.Writer, pb progressReporterFactory, args
 
 	_, _ = fmt.Fprintf(stdout, "Updating database at %q\n", args.dbPath)
 
-	bar = pb(int64(len(parsed)))
-	for _, parsedSong := range parsed {
-		if _, ok := existingMap[parsedSong.Path]; ok {
+	bar = pb(ct)
+
+	go func(songQ <-chan mp3util.Song) {
+		for s := range songQ {
+			if _, ok := existingMap[s.Path]; ok {
+				_ = bar.Add(1)
+				continue
+			}
+			err = db.RecordSong(s)
+			if err != nil {
+				diePrintf(stderr, "error saving %q:  %s\n", s.Path, err)
+			}
 			_ = bar.Add(1)
-			continue
 		}
-		err = db.RecordSong(parsedSong)
-		if err != nil {
-			diePrintf(stderr, "error saving %q:  %s\n", parsedSong.Path, err)
-		}
-		_ = bar.Add(1)
-	}
+	}(songQ)
+
+	wg2.Wait()
 
 	err = tx.Commit()
 	if err != nil {
