@@ -54,6 +54,9 @@ func main() {
 }
 
 func sum(stdout io.Writer, stderr io.Writer, args sumArgs) {
+	if args.degreeOfParallelism < 1 {
+		diePrintln(stderr, "Degree of parallelism must be greater than 0")
+	}
 	info, err := os.Stat(args.directory)
 	if (err != nil && os.IsNotExist(err)) || !info.IsDir() {
 		_, _ = fmt.Fprintf(stderr, "%q is not a directory\n", args.directory)
@@ -90,14 +93,16 @@ func sum(stdout io.Writer, stderr io.Writer, args sumArgs) {
 		go func(q <-chan string, sink chan<- struct {
 			song mp3.Song
 			err  error
-		}) { for el := range q {
-			res, err := mp3.ParseMP3(el)
-			x := struct {
-				song mp3.Song
-				err  error
-			}{res, err}
-			sink <- x
-		} }(q, sink)
+		}) {
+			for el := range q {
+				res, err := mp3.ParseMP3(el)
+				x := struct {
+					song mp3.Song
+					err  error
+				}{res, err}
+				sink <- x
+			}
+		}(q, sink)
 	}
 
 	go func() {
