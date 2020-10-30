@@ -20,7 +20,7 @@ func TestSum(t *testing.T) {
 		fmt.Fprintf(expected, "%q:  %x\n", track, hash)
 	}
 	stdout, stderr := new(bytes.Buffer), new(bytes.Buffer)
-	sum(stdout, stderr, mp3s)
+	sum(stdout, stderr, sumArgs{20, path})
 	res := stdout.String()
 	expectedS := expected.String()
 	if res != expectedS {

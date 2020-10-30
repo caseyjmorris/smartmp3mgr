@@ -10,8 +10,11 @@ import (
 	"github.com/schollz/progressbar/v3"
 	"io"
 	"io/ioutil"
+	"math"
 	"os"
+	"sort"
 	"strings"
+	"sync"
 )
 
 func main() {
@@ -26,7 +29,11 @@ func main() {
 
 	switch os.Args[1] {
 	case "sum":
-		sum(os.Stdout, os.Stdin, os.Args[2:])
+		args, err := parseSumArgs()
+		if err != nil {
+			diePrintln(os.Stderr, err)
+		}
+		sum(os.Stdout, os.Stdin, args)
 	case "record":
 		args, err := parseRecordArgs()
 		if err != nil {
@@ -46,13 +53,71 @@ func main() {
 	os.Exit(0)
 }
 
-func sum(stdout io.Writer, stderr io.Writer, paths []string) {
-	for _, file := range paths {
-		track, err := mp3.ParseMP3(file)
-		if err != nil {
-			diePrintf(stderr, "%s\nusage:  smartmp3mgr sum [files]", err)
+func sum(stdout io.Writer, stderr io.Writer, args sumArgs) {
+	info, err := os.Stat(args.directory)
+	if (err != nil && os.IsNotExist(err)) || !info.IsDir() {
+		_, _ = fmt.Fprintf(stderr, "%q is not a directory\n", args.directory)
+		if strings.HasSuffix(os.Args[2], "\\\"") {
+			_, _ = fmt.Fprintf(stderr, "hint:  are you on Windows and using a quoted directory with the trailing backslash?")
 		}
-		_, _ = fmt.Fprintf(stdout, "%q:  %s\n", file, track.Hash)
+		recordCmd.Usage()
+		os.Exit(1)
+	}
+
+	mp3files, err := files.FindMP3Files(args.directory)
+	if err != nil {
+		diePrintln(stderr, err)
+	}
+
+	q := make(chan string, len(mp3files))
+	sink := make(chan struct {
+		song mp3.Song
+		err  error
+	}, len(mp3files))
+	var r []mp3.Song
+
+	for _, file := range mp3files {
+		q <- file
+	}
+	close(q)
+
+	dop := int(math.Min(float64(args.degreeOfParallelism), float64(len(mp3files))))
+
+	var wg sync.WaitGroup
+	wg.Add(len(mp3files))
+
+	for i := 0; i < dop; i++ {
+		go func(q <-chan string, sink chan<- struct {
+			song mp3.Song
+			err  error
+		}) { for el := range q {
+			res, err := mp3.ParseMP3(el)
+			x := struct {
+				song mp3.Song
+				err  error
+			}{res, err}
+			sink <- x
+		} }(q, sink)
+	}
+
+	go func() {
+		for file := range sink {
+			if file.err != nil {
+				diePrintf(stderr, "%s\nusage:  smartmp3mgr sum [files]", err)
+			}
+			r = append(r, file.song)
+			wg.Done()
+		}
+	}()
+
+	wg.Wait()
+
+	sort.Slice(r, func(i, j int) bool {
+		return r[i].Path < r[j].Path
+	})
+
+	for _, track := range r {
+		_, _ = fmt.Fprintf(stdout, "%q:  %s\n", track.Path, track.Hash)
 	}
 }
 
