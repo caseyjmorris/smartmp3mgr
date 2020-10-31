@@ -23,6 +23,7 @@ type findNewArgs struct {
 	dbPath              string
 	rehash              bool
 	degreeOfParallelism int
+	foldersOnly         bool
 }
 
 type recordArgs struct {
@@ -56,12 +57,13 @@ func parseFindNewArgs() (result findNewArgs, err error) {
 	newCmdDb := findNewCmd.String("dbPath", defaultDb, "path to sqlite db")
 	rehash := findNewCmd.Bool("rehash", false, "force a recalculation of existing file hashes")
 	dop := findNewCmd.Int("dop", 20, "degree of parallelism")
+	foldersOnly := findNewCmd.Bool("fo", false, "show folders only")
 	err = findNewCmd.Parse(os.Args[2:])
 	if err != nil {
 		return
 	}
 
-	result = findNewArgs{*newCmdDir, *newCmdDb, *rehash, *dop}
+	result = findNewArgs{*newCmdDir, *newCmdDb, *rehash, *dop, *foldersOnly}
 	return
 }
 

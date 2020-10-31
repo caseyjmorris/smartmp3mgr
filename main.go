@@ -12,6 +12,7 @@ import (
 	"io/ioutil"
 	"math"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -308,10 +309,21 @@ func findNew(stdout io.Writer, stderr io.Writer, prf progressReporterFactory, ar
 		}
 	}()
 
+	folders := make(map[string]bool)
+
 	go func() {
 		for u := range uniqQ {
 			uniq++
-			results = append(results, u)
+			if args.foldersOnly {
+				f := filepath.Dir(u)
+				if !folders[f] {
+					folders[f] = true
+					results = append(results, f)
+				}
+			} else {
+				results = append(results, u)
+			}
+
 			if resultCapture != nil {
 				*resultCapture = append(*resultCapture, u)
 			}
