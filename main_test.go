@@ -119,14 +119,16 @@ func TestFindNew(t *testing.T) {
 	record(os.Stdout, os.Stderr, newTestProgressBar, recordArgs)
 
 	findNewArgs := findNewArgs{
-		directory: tmpPath,
-		dbPath:    dbPath,
-		rehash:    false,
+		directory:           tmpPath,
+		dbPath:              dbPath,
+		rehash:              false,
+		degreeOfParallelism: 20,
 	}
 
 	var res []string
 
 	findNew(os.Stdout, os.Stderr, newTestProgressBar, findNewArgs, &res)
+	sort.Strings(res)
 	expected := []string{mp3Path(3), mp3Path(4)}
 
 	if !reflect.DeepEqual(expected, res) {

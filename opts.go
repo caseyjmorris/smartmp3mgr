@@ -19,9 +19,10 @@ type sumArgs struct {
 }
 
 type findNewArgs struct {
-	directory string
-	dbPath    string
-	rehash    bool
+	directory           string
+	dbPath              string
+	rehash              bool
+	degreeOfParallelism int
 }
 
 type recordArgs struct {
@@ -54,12 +55,13 @@ func parseFindNewArgs() (result findNewArgs, err error) {
 	newCmdDir := findNewCmd.String("directory", "", "directory")
 	newCmdDb := findNewCmd.String("dbPath", defaultDb, "path to sqlite db")
 	rehash := findNewCmd.Bool("rehash", false, "force a recalculation of existing file hashes")
+	dop := findNewCmd.Int("dop", 20, "degree of parallelism")
 	err = findNewCmd.Parse(os.Args[2:])
 	if err != nil {
 		return
 	}
 
-	result = findNewArgs{*newCmdDir, *newCmdDb, *rehash}
+	result = findNewArgs{*newCmdDir, *newCmdDb, *rehash, *dop}
 	return
 }
 

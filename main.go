@@ -204,6 +204,11 @@ func record(stdout io.Writer, stderr io.Writer, pb progressReporterFactory, args
 }
 
 func findNew(stdout io.Writer, stderr io.Writer, prf progressReporterFactory, args findNewArgs, resultCapture *[]string) {
+	dieUnlessDirectoryExists(stderr, args.directory)
+	if args.degreeOfParallelism < 1 {
+		diePrintln(stderr, "degree of parallelism must be greater than 0")
+	}
+
 	db, err := records.Open(args.dbPath)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "%s", err)
@@ -217,16 +222,6 @@ func findNew(stdout io.Writer, stderr io.Writer, prf progressReporterFactory, ar
 		_, _ = fmt.Fprintf(stderr, "failed to open db %q:  %s", args.dbPath, err)
 	}
 
-	info, err := os.Stat(args.directory)
-	if (err != nil && os.IsNotExist(err)) || !info.IsDir() {
-		_, _ = fmt.Fprintf(stderr, "%q is not a directory\n", args.directory)
-		if strings.HasSuffix(os.Args[2], "\\\"") {
-			_, _ = fmt.Fprintln(stderr, "hint:  are you on Windows and using a quoted directory with the trailing backslash?")
-		}
-		findNewCmd.Usage()
-		os.Exit(1)
-	}
-
 	_, _ = fmt.Fprintf(stdout, "Looking for files in %q\n", args.directory)
 
 	mp3Files, err := mp3fileutil.FindMP3Files(args.directory)
@@ -234,6 +229,13 @@ func findNew(stdout io.Writer, stderr io.Writer, prf progressReporterFactory, ar
 	if err != nil {
 		diePrintln(stdout, err)
 	}
+
+	fileQ := make(chan string, len(mp3Files))
+
+	for _, f := range mp3Files {
+		fileQ <- f
+	}
+	close(fileQ)
 
 	existsMap := make(map[string]mp3util.Song)
 	if !args.rehash {
@@ -258,35 +260,80 @@ func findNew(stdout io.Writer, stderr io.Writer, prf progressReporterFactory, ar
 	bar := prf(int64(len(mp3Files)))
 	var results []string
 
-	for _, file := range mp3Files {
-		var hashS string
-		if existing, ok := knownHashes[file]; ok {
-			hashS = existing
-		} else {
-			bytes, err := ioutil.ReadFile(file)
-			if err != nil {
-				continue
+	doneQ := make(chan int, len(mp3Files))
+	uniqQ := make(chan string)
+	fileHashQ := make(chan [2]string)
+	var wg sync.WaitGroup
+	wg.Add(len(mp3Files))
+
+	for i := 0; i < args.degreeOfParallelism; i++ {
+		go func(doneQ chan<- int, uniqQ chan<- string, fileHashQ chan<- [2]string) {
+			for file := range fileQ {
+				var hashS string
+				if existing, ok := knownHashes[file]; ok {
+					hashS = existing
+				} else {
+					bytes, err := ioutil.ReadFile(file)
+					if err != nil {
+						doneQ <- 1
+						wg.Done()
+						continue
+					}
+					hash, err := mp3util.Hash(bytes)
+					if err != nil {
+						doneQ <- 1
+						wg.Done()
+						continue
+					}
+					hashS = hex.EncodeToString(hash[:])
+					wg.Add(1)
+					fileHashQ <- [2]string{file, hashS}
+
+				}
+
+				if _, ok := existsMap[hashS]; !ok {
+					wg.Add(1)
+					uniqQ <- file
+				}
+
+				doneQ <- 1
+				wg.Done()
 			}
-			hash, err := mp3util.Hash(bytes)
-			if err != nil {
-				continue
+		}(doneQ, uniqQ, fileHashQ)
+	}
+
+	go func() {
+		for i := range doneQ {
+			_ = bar.Add(i)
+		}
+	}()
+
+	go func() {
+		for u := range uniqQ {
+			uniq++
+			results = append(results, u)
+			if resultCapture != nil {
+				*resultCapture = append(*resultCapture, u)
 			}
-			hashS = hex.EncodeToString(hash[:])
+			wg.Done()
+		}
+	}()
+
+	go func() {
+		for fh := range fileHashQ {
+			file := fh[0]
+			hashS := fh[1]
 			err = db.CacheHash(file, hashS)
 			if err != nil {
 				diePrintf(stderr, "failed to write cached hash:  %s\n", err)
 			}
+			wg.Done()
 		}
+	}()
 
-		if _, ok := existsMap[hashS]; !ok {
-			uniq++
-			results = append(results, file)
-			if resultCapture != nil {
-				*resultCapture = append(*resultCapture, file)
-			}
-		}
-		_ = bar.Add(1)
-	}
+	wg.Wait()
+
+	sort.Strings(results)
 
 	err = tx.Commit()
 
