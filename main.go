@@ -130,15 +130,21 @@ func record(stdout io.Writer, stderr io.Writer, pb progressReporterFactory, args
 
 	bar := pb(int64(len(mp3Files)))
 
+	tx, err := db.Begin()
+
+	if err != nil {
+		diePrintf(stderr, "error opening transaction:  %s\n", err)
+	}
+
 	songQ := make(chan mp3util.Song, len(mp3Files))
 	doneQ := make(chan int, len(mp3Files))
+
 	var wg sync.WaitGroup
-	var wg2 sync.WaitGroup
+	wg.Add(len(mp3Files))
+
 	for i := 0; i < args.degreeOfParallelism; i++ {
 		go func(songQ chan<- mp3util.Song, doneQ chan<- int) {
 			for file := range fileQ {
-				wg.Add(1)
-				wg2.Add(1)
 				var record mp3util.Song
 				if cached, ok := existingMap[file]; ok {
 					record = cached
@@ -148,6 +154,7 @@ func record(stdout io.Writer, stderr io.Writer, pb progressReporterFactory, args
 						continue
 					}
 				}
+				wg.Add(1)
 				songQ <- record
 				doneQ <- 1
 			}
@@ -164,35 +171,21 @@ func record(stdout io.Writer, stderr io.Writer, pb progressReporterFactory, args
 		}
 	}(doneQ)
 
-	wg.Wait()
-
-	tx, err := db.Begin()
-
-	if err != nil {
-		diePrintf(stderr, "error opening transaction:  %s\n", err)
-	}
-
-	_, _ = fmt.Fprintf(stdout, "Updating database at %q\n", args.dbPath)
-
-	bar = pb(ct)
-
 	go func(songQ <-chan mp3util.Song) {
 		for s := range songQ {
 			if _, ok := existingMap[s.Path]; ok {
-				_ = bar.Add(1)
-				wg2.Done()
+				wg.Done()
 				continue
 			}
 			err = db.RecordSong(s)
 			if err != nil {
 				diePrintf(stderr, "error saving %q:  %s\n", s.Path, err)
 			}
-			_ = bar.Add(1)
-			wg2.Done()
+			wg.Done()
 		}
 	}(songQ)
 
-	wg2.Wait()
+	wg.Wait()
 
 	err = tx.Commit()
 	if err != nil {
