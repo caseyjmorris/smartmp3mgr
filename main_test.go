@@ -47,7 +47,6 @@ func TestSum(t *testing.T) {
 }
 
 func TestRecord(t *testing.T) {
-	stdout, stderr := new(bytes.Buffer), new(bytes.Buffer)
 	path := testHelpers.GetFixturePath("")
 	dbf, err := ioutil.TempFile(os.TempDir(), "smartmp3mgr*.sql")
 	if err != nil {
@@ -65,11 +64,7 @@ func TestRecord(t *testing.T) {
 	}
 
 	for i := 0; i < 4; i++ {
-		record(stdout, stderr, newTestProgressBar, args)
-	}
-
-	if stderr.String() != "" {
-		t.Error(stderr)
+		record(os.Stdout, os.Stderr, newTestProgressBar, args)
 	}
 
 	rk, _ := records.Open(dbPath)

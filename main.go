@@ -59,16 +59,6 @@ func main() {
 }
 
 func sum(stdout io.Writer, stderr io.Writer, args sumArgs) {
-	info, err := os.Stat(args.directory)
-	if (err != nil && os.IsNotExist(err)) || !info.IsDir() {
-		_, _ = fmt.Fprintf(stderr, "%q is not a directory\n", args.directory)
-		if strings.HasSuffix(os.Args[2], "\\\"") {
-			_, _ = fmt.Fprintf(stderr, "hint:  are you on Windows and using a quoted directory with the trailing backslash?")
-		}
-		recordCmd.Usage()
-		os.Exit(1)
-	}
-
 	mp3files, err := mp3fileutil.FindMP3Files(args.directory)
 	if err != nil {
 		diePrintln(stderr, err)
@@ -122,15 +112,8 @@ func sum(stdout io.Writer, stderr io.Writer, args sumArgs) {
 }
 
 func record(stdout io.Writer, stderr io.Writer, pb progressReporterFactory, args recordArgs) {
-	info, err := os.Stat(args.directory)
-	if (err != nil && os.IsNotExist(err)) || !info.IsDir() {
-		_, _ = fmt.Fprintf(stderr, "%q is not a directory\n", args.directory)
-		if strings.HasSuffix(os.Args[2], "\\\"") {
-			_, _ = fmt.Fprintf(stderr, "hint:  are you on Windows and using a quoted directory with the trailing backslash?")
-		}
-		recordCmd.Usage()
-		os.Exit(1)
-	}
+	dieUnlessDirectoryExists(stderr, args.directory)
+	db, existingMap := fetchSongsOrDie(stderr, args.dbPath, args.reparse)
 
 	_, _ = fmt.Fprintf(stdout, "Scanning %q for MP3s\n", args.directory)
 	mp3Files, err := mp3fileutil.FindMP3Files(args.directory)
@@ -140,24 +123,7 @@ func record(stdout io.Writer, stderr io.Writer, pb progressReporterFactory, args
 	for _, file := range mp3Files {
 		fileQ <- file
 	}
-
-	db, err := records.Open(args.dbPath)
-	if err != nil {
-		diePrintln(stderr, err)
-	}
-
-	existing, err := db.FetchSongs()
-	if err != nil {
-		diePrintln(stderr, err)
-	}
-
-	existingMap := make(map[string]mp3util.Song)
-
-	if !args.reparse {
-		for _, existingFile := range existing {
-			existingMap[existingFile.Path] = existingFile
-		}
-	}
+	close(fileQ)
 
 	_, _ = fmt.Fprintf(stdout, "Scanning %d files\n", len(mp3Files))
 
@@ -170,6 +136,8 @@ func record(stdout io.Writer, stderr io.Writer, pb progressReporterFactory, args
 	for i := 0; i < args.degreeOfParallelism; i++ {
 		go func(songQ chan<- mp3util.Song, doneQ chan<- int) {
 			for file := range fileQ {
+				wg.Add(1)
+				wg2.Add(1)
 				var record mp3util.Song
 				if cached, ok := existingMap[file]; ok {
 					record = cached
@@ -181,8 +149,6 @@ func record(stdout io.Writer, stderr io.Writer, pb progressReporterFactory, args
 				}
 				songQ <- record
 				doneQ <- 1
-				wg.Add(1)
-				wg2.Add(2)
 			}
 		}(songQ, doneQ)
 	}
@@ -213,6 +179,7 @@ func record(stdout io.Writer, stderr io.Writer, pb progressReporterFactory, args
 		for s := range songQ {
 			if _, ok := existingMap[s.Path]; ok {
 				_ = bar.Add(1)
+				wg2.Done()
 				continue
 			}
 			err = db.RecordSong(s)
@@ -220,6 +187,7 @@ func record(stdout io.Writer, stderr io.Writer, pb progressReporterFactory, args
 				diePrintf(stderr, "error saving %q:  %s\n", s.Path, err)
 			}
 			_ = bar.Add(1)
+			wg2.Done()
 		}
 	}(songQ)
 
@@ -328,6 +296,40 @@ func findNew(stdout io.Writer, stderr io.Writer, prf progressReporterFactory, ar
 	}
 
 	_, _ = fmt.Fprintf(stdout, "(%d new songs)\n", uniq)
+}
+
+func dieUnlessDirectoryExists(stderr io.Writer, directory string) {
+	info, err := os.Stat(directory)
+	if (err != nil && os.IsNotExist(err)) || !info.IsDir() {
+		_, _ = fmt.Fprintf(stderr, "%q is not a directory\n", directory)
+		if strings.HasSuffix(os.Args[2], "\\\"") {
+			_, _ = fmt.Fprintf(stderr, "hint:  are you on Windows and using a quoted directory with the trailing backslash?")
+		}
+		recordCmd.Usage()
+		os.Exit(1)
+	}
+}
+
+func fetchSongsOrDie(stderr io.Writer, dbPath string, reparse bool) (*records.RecordKeeper, map[string]mp3util.Song) {
+	db, err := records.Open(dbPath)
+	if err != nil {
+		diePrintln(stderr, err)
+	}
+
+	existing, err := db.FetchSongs()
+	if err != nil {
+		diePrintln(stderr, err)
+	}
+
+	existingMap := make(map[string]mp3util.Song)
+
+	if !reparse {
+		for _, existingFile := range existing {
+			existingMap[existingFile.Path] = existingFile
+		}
+	}
+
+	return db, existingMap
 }
 
 func diePrintf(w io.Writer, format string, args ...interface{}) {
