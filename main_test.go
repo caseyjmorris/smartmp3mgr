@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"github.com/caseyjmorris/smartmp3mgr/mp3fileutil"
 	"github.com/caseyjmorris/smartmp3mgr/mp3util"
@@ -80,5 +82,78 @@ func TestRecord(t *testing.T) {
 	sort.Strings(baseNamesOnly)
 	if !reflect.DeepEqual(expected, baseNamesOnly) {
 		t.Errorf("Records returned don't match.  \r\nExpected:  %+v  \r\nActual:  %+v", expected, baseNamesOnly)
+	}
+}
+
+func TestFindNew(t *testing.T) {
+	b := make([]byte, 8)
+	_, _ = rand.Read(b)
+	h := hex.EncodeToString(b[:7])
+	tmpPath := filepath.Join(os.TempDir(), "test"+h)
+	os.Mkdir(tmpPath, 0755)
+	path := testHelpers.GetFixturePath("")
+	dbf, err := ioutil.TempFile(os.TempDir(), "smartmp3mgr*.sql")
+	if err != nil {
+		t.Error("Couldn't make DB temp file")
+		return
+	}
+	dbPath := dbf.Name()
+	_ = dbf.Close()
+	defer os.Remove(dbPath)
+	mp3Path := func(i int) string { return filepath.Join(tmpPath, fmt.Sprintf("%d.mp3", i)) }
+	for i := 1; i < 5; i++ {
+		defer os.Remove(mp3Path(i))
+	}
+	defer os.Remove(tmpPath)
+	copyFile(testHelpers.GetFixturePath("spring-chicken.mp3"), mp3Path(1), t)
+	copyFile(testHelpers.GetFixturePath("wakka-wakka-altered-tags.mp3"), mp3Path(2), t)
+	writeRandomFile(mp3Path(3), t)
+	writeRandomFile(mp3Path(4), t)
+
+	recordArgs := recordArgs{
+		directory:           path,
+		dbPath:              dbPath,
+		reparse:             false,
+		degreeOfParallelism: 20,
+	}
+	record(os.Stdout, os.Stderr, newTestProgressBar, recordArgs)
+
+	findNewArgs := findNewArgs{
+		directory: tmpPath,
+		dbPath:    dbPath,
+		rehash:    false,
+	}
+
+	var res []string
+
+	findNew(os.Stdout, os.Stderr, newTestProgressBar, findNewArgs, &res)
+	expected := []string{mp3Path(3), mp3Path(4)}
+
+	if !reflect.DeepEqual(expected, res) {
+		t.Errorf("Values differed.  \nExpected:  \n%+v\n\nFound:  \n%+v", expected, res)
+	}
+}
+
+func writeRandomFile(to string, t *testing.T) {
+	b := make([]byte, 1024)
+	_, err := rand.Read(b)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	err = ioutil.WriteFile(to, b, 0755)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func copyFile(from string, to string, t *testing.T) {
+	b, err := ioutil.ReadFile(from)
+	if err != nil {
+		t.Error(err)
+	}
+	err = ioutil.WriteFile(to, b, 0755)
+	if err != nil {
+		t.Error(err)
 	}
 }

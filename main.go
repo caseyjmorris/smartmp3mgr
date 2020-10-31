@@ -50,7 +50,7 @@ func main() {
 		if err != nil {
 			diePrintf(os.Stderr, "%s", err)
 		}
-		findNew(os.Stdout, os.Stderr, prf, args)
+		findNew(os.Stdout, os.Stderr, prf, args, nil)
 	default:
 		diePrintln(os.Stderr, "Usage:  smartmp3mgr (sum|record|find-new) (args)")
 	}
@@ -203,7 +203,7 @@ func record(stdout io.Writer, stderr io.Writer, pb progressReporterFactory, args
 	}
 }
 
-func findNew(stdout io.Writer, stderr io.Writer, prf progressReporterFactory, args findNewArgs) {
+func findNew(stdout io.Writer, stderr io.Writer, prf progressReporterFactory, args findNewArgs, resultCapture *[]string) {
 	db, err := records.Open(args.dbPath)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "%s", err)
@@ -281,6 +281,9 @@ func findNew(stdout io.Writer, stderr io.Writer, prf progressReporterFactory, ar
 		if _, ok := existsMap[hashS]; !ok {
 			uniq++
 			results = append(results, file)
+			if resultCapture != nil {
+				*resultCapture = append(*resultCapture, file)
+			}
 		}
 		_ = bar.Add(1)
 	}
