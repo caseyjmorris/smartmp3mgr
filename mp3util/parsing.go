@@ -1,10 +1,10 @@
 package mp3util
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"github.com/dhowden/tag"
-	"io/ioutil"
 	"os"
 )
 
@@ -15,6 +15,17 @@ func ParseMP3(mp3Path string) (Song, error) {
 	if err != nil {
 		return song, fmt.Errorf("error opening %q:  %s", mp3Path, err)
 	}
+	var buf bytes.Buffer
+	_, err = buf.ReadFrom(file)
+	if err != nil {
+		return song, fmt.Errorf("error reading %q:  %s", mp3Path, err)
+	}
+
+	_, err = file.Seek(0, 0)
+	if err != nil {
+		return song, fmt.Errorf("error seeking file %q:  %s", mp3Path, err)
+	}
+
 	tags, err := tag.ReadFrom(file)
 	if err == nil {
 		trackNumber, tracks := tags.Track()
@@ -23,14 +34,11 @@ func ParseMP3(mp3Path string) (Song, error) {
 			Title: tags.Title(), TrackNumber: trackNumber, TotalTracks: tracks, DiscNumber: discNumber, TotalDiscs: discs,
 			AlbumArtist: tags.AlbumArtist()}
 	}
-
-	mp3Bytes, err := ioutil.ReadFile(mp3Path)
-
 	if err != nil {
-		return song, fmt.Errorf("error reading %q:  %s", mp3Path, err)
+		return song, fmt.Errorf("error copying buffer for %q:  %s", mp3Path, err)
 	}
 
-	hash, err := Hash(mp3Bytes)
+	hash, err := Hash(buf.Bytes())
 	if err != nil {
 		return song, fmt.Errorf("error finding hash of %q:  %s", mp3Path, err)
 	}
