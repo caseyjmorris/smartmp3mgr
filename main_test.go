@@ -1,12 +1,9 @@
 package main
 
 import (
-	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"github.com/caseyjmorris/smartmp3mgr/mp3fileutil"
-	"github.com/caseyjmorris/smartmp3mgr/mp3util"
 	"github.com/caseyjmorris/smartmp3mgr/records"
 	"github.com/caseyjmorris/smartmp3mgr/testHelpers"
 	"io/ioutil"
@@ -28,24 +25,6 @@ func (t *testProgressBar) Add(num int) error {
 
 func newTestProgressBar(max int64, description ...string) progressReporter {
 	return new(testProgressBar)
-}
-
-func TestSum(t *testing.T) {
-	path := testHelpers.GetFixturePath("")
-	mp3s, _ := mp3fileutil.FindMP3Files(path)
-	expected := new(bytes.Buffer)
-	for _, track := range mp3s {
-		fileBytes, _ := ioutil.ReadFile(track)
-		hash, _ := mp3util.Hash(fileBytes)
-		fmt.Fprintf(expected, "%q:  %x\n", track, hash)
-	}
-	stdout, stderr := new(bytes.Buffer), new(bytes.Buffer)
-	sum(stdout, stderr, sumArgs{20, path})
-	res := stdout.String()
-	expectedS := expected.String()
-	if res != expectedS {
-		t.Error(res)
-	}
 }
 
 func TestRecord(t *testing.T) {

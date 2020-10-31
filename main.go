@@ -10,18 +10,12 @@ import (
 	"github.com/schollz/progressbar/v3"
 	"io"
 	"io/ioutil"
-	"math"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
 )
-
-type maybeSong struct {
-	song mp3util.Song
-	err  error
-}
 
 func main() {
 	if len(os.Args) < 3 {
@@ -34,12 +28,6 @@ func main() {
 	}
 
 	switch os.Args[1] {
-	case "sum":
-		args, err := parseSumArgs()
-		if err != nil {
-			diePrintln(os.Stderr, err)
-		}
-		sum(os.Stdout, os.Stdin, args)
 	case "record":
 		args, err := parseRecordArgs()
 		if err != nil {
@@ -57,59 +45,6 @@ func main() {
 	}
 
 	os.Exit(0)
-}
-
-func sum(stdout io.Writer, stderr io.Writer, args sumArgs) {
-	mp3files, err := mp3fileutil.FindMP3Files(args.directory)
-	if err != nil {
-		diePrintln(stderr, err)
-	}
-
-	q := make(chan string, len(mp3files))
-	sink := make(chan maybeSong, len(mp3files))
-	var r []mp3util.Song
-
-	for _, file := range mp3files {
-		q <- file
-	}
-	close(q)
-
-	dop := int(math.Min(float64(args.degreeOfParallelism), float64(len(mp3files))))
-
-	var wg sync.WaitGroup
-	wg.Add(len(mp3files))
-
-	for i := 0; i < dop; i++ {
-		go func(q <-chan string, sink chan<- maybeSong) {
-			for el := range q {
-				res, err := mp3util.ParseMP3(el)
-				sink <- maybeSong{
-					song: res,
-					err:  err,
-				}
-			}
-		}(q, sink)
-	}
-
-	go func() {
-		for file := range sink {
-			if file.err != nil {
-				diePrintf(stderr, "%s\nusage:  smartmp3mgr sum [files]", err)
-			}
-			r = append(r, file.song)
-			wg.Done()
-		}
-	}()
-
-	wg.Wait()
-
-	sort.Slice(r, func(i, j int) bool {
-		return r[i].Path < r[j].Path
-	})
-
-	for _, track := range r {
-		_, _ = fmt.Fprintf(stdout, "%q:  %s\n", track.Path, track.Hash)
-	}
 }
 
 func record(stdout io.Writer, stderr io.Writer, pb progressReporterFactory, args recordArgs) {

@@ -7,16 +7,10 @@ import (
 	"path/filepath"
 )
 
-var sumCmd = flag.NewFlagSet("sum", flag.ExitOnError)
 var findNewCmd = flag.NewFlagSet("find-new", flag.ExitOnError)
 var recordCmd = flag.NewFlagSet("record", flag.ExitOnError)
 var homeDir, _ = os.UserHomeDir()
 var defaultDb = filepath.Join(homeDir, ".smartmp3mgr.sql")
-
-type sumArgs struct {
-	degreeOfParallelism int
-	directory           string
-}
 
 type findNewArgs struct {
 	directory           string
@@ -31,25 +25,6 @@ type recordArgs struct {
 	directory           string
 	dbPath              string
 	reparse             bool
-}
-
-func parseSumArgs() (result sumArgs, err error) {
-	dop := sumCmd.Int("dop", 20, "degree of parallelism")
-	d := sumCmd.String("directory", "", "directory for files to sum")
-	err = sumCmd.Parse(os.Args[2:])
-	if err == nil && *dop < 1 {
-		err = errors.New("dop must be greater than zero")
-	}
-	if err != nil {
-		return
-	}
-
-	result = sumArgs{
-		degreeOfParallelism: *dop,
-		directory:           *d,
-	}
-
-	return
 }
 
 func parseFindNewArgs() (result findNewArgs, err error) {
